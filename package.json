@@ -11,7 +11,7 @@
     "yarn": "1.x"
   },
   "scripts": {
-    "start": "npx pm2 start dist/app.js --name mafia",
+    "start": "node dist/app.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon",
     "build": "tsc"
