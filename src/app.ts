@@ -56,13 +56,13 @@ peerServer.on('disconnect', (client) => {
   );
 });
 
-app.use('/', (req, res) => {
-  return res.status(200).json('Hello from server!');
-});
 peerApp.use('/peerjs', peerServer);
 app.use('/games', gamesRouter);
 app.use('/users', usersRouter);
 app.use('/messages', messagesRouter);
+app.use('/', (req, res) => {
+  return res.status(200).json('Hello from server!');
+});
 
 app.use(errorLogger);
 app.use(errorHandler);
