@@ -8,7 +8,7 @@
   "private": true,
   "engines": {
     "node": ">=20.x",
-    "yarn": ">=1.22.5"
+    "yarn": ">=1.22.x"
   },
   "scripts": {
     "start": "npx pm2 start dist/app.js --name mafia",
