@@ -56,6 +56,9 @@ peerServer.on('disconnect', (client) => {
   );
 });
 
+app.use('/', (req, res) => {
+  return res.status(200).json('Hello from server!');
+});
 peerApp.use('/peerjs', peerServer);
 app.use('/games', gamesRouter);
 app.use('/users', usersRouter);
@@ -65,7 +68,6 @@ app.use(errorLogger);
 app.use(errorHandler);
 
 const connection = mongoose.connect(mongoURI, { dbName: 'mafia' });
-// const connection = mongoose.connect(mongoURI, { dbName: 'mafia' });
 
 connection
   .then(() => {
