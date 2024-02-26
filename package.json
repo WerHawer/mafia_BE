@@ -6,6 +6,10 @@
   "license": "MIT",
   "main": "dist/app.js",
   "private": true,
+  "engines": {
+    "node": ">=20.x",
+    "yarn": ">=1.22.5"
+  },
   "scripts": {
     "start": "npx pm2 start dist/app.js --name mafia",
     "test": "echo \"Error: no test specified\" && exit 1",
