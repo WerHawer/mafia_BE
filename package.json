@@ -1,14 +1,13 @@
 {
   "name": "mafia",
   "version": "0.0.1",
-  "type": "module",
   "description": "mafia game",
   "author": "Kostyantyn",
   "license": "MIT",
   "main": "app.js",
   "private": "true",
   "scripts": {
-    "start": "npx pm2 start ./dist/app.js",
+    "start": "npx pm2 start ./dist/app.js --name mafia",
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon",
     "build": "tsc"
