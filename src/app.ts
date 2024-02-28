@@ -62,10 +62,8 @@ peerApp.use('/peerjs', peerServer);
 app.use('/games', gamesRouter);
 app.use('/users', usersRouter);
 app.use('/messages', messagesRouter);
-app.use('/', (req, res, next) => {
+app.get('/', (req, res) => {
   res.status(200).json('Hello from server!');
-
-  next();
 });
 
 app.use(errorLogger);
