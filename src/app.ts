@@ -31,7 +31,7 @@ const peerServer = ExpressPeerServer(httpPeerServer, {
 
 connectSocket(io);
 
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5051;
 const peerPort = process.env.PEER_PORT || 5001;
 const mongoURI = process.env.DB_HOST;
 
