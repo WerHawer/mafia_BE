@@ -1,6 +1,8 @@
 import { Server } from 'socket.io';
 import * as userService from './subjects/users/usersService';
 import * as messagesService from './subjects/messages/messagesService';
+import { dataNormalize } from './helpers/dataNormalize';
+import { messagesPopulate } from './subjects/messages/messagesService';
 
 export const connectSocket = (io: Server) => {
   io.on('connection', async (socket) => {
@@ -18,12 +20,11 @@ export const connectSocket = (io: Server) => {
     console.log(`User connected! Hi ${user.name}`);
 
     socket.on('joinRoom', async (roomId, userId) => {
+      const roomMessages = await messagesService.getRoomMessages(roomId);
+
       socket.join(roomId);
       socket.to(roomId).emit('userConnectedToRoom', userId);
-      io.to(roomId).emit(
-        'getRoomMessages',
-        await messagesService.getRoomMessages(roomId)
-      );
+      io.to(roomId).emit('getRoomMessages', dataNormalize(roomMessages));
 
       socket.on('userDisconnectedFromRoom', (streamId) => {
         io.to(roomId).emit('userDisconnectedFromRoom', streamId);
@@ -35,20 +36,25 @@ export const connectSocket = (io: Server) => {
 
     io.emit('connectMessage', io.sockets.sockets.size);
 
-    socket.emit('getAllMessages', await messagesService.getAllPublicMessages());
+    const allMessages = await (async () => {
+      const messages = await messagesService.getAllPublicMessages();
+      return dataNormalize(messages);
+    })();
+
+    socket.emit('getAllMessages', allMessages);
 
     socket.on('chatMessage', async (message) => {
       const savedMessage = await messagesService.createMessage(message);
-      await savedMessage.populate('sender');
+      await savedMessage.populate(messagesPopulate);
 
-      socket.broadcast.emit('chatMessage', savedMessage);
+      socket.broadcast.emit('chatMessage', dataNormalize(savedMessage));
     });
 
     socket.on('roomMessage', async (message) => {
       const savedMessage = await messagesService.createMessage(message);
-      await savedMessage.populate('sender');
+      await savedMessage.populate(messagesPopulate);
 
-      socket.to(message.to.id).emit('roomMessage', savedMessage);
+      socket.to(message.to.id).emit('roomMessage', dataNormalize(savedMessage));
     });
 
     socket.on('disconnect', () => {

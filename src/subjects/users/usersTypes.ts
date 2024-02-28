@@ -1,28 +1,28 @@
-import { Types } from 'mongoose'
+import { Types } from 'mongoose';
 
 export interface IUser {
-  email: string
-  name: string
-  nikName?: string
-  friendList: []
-  isOnline: true
-  avatar?: IUserAvatar[]
-  password?: string
+  email: string;
+  name: string;
+  nikName?: string;
+  friendList: [];
+  isOnline: true;
+  avatar?: IUserAvatar[];
+  password?: string;
   // history: [],
 }
 
 export interface IUserCreate {
-  email: string
-  name: string
-  nikName?: string
-  password: string
+  email: string;
+  name: string;
+  nikName?: string;
+  password: string;
 }
 
 export interface IUserDTO extends Omit<IUser, 'avatar'> {
-  avatar: IUserAvatar
+  avatar: IUserAvatar;
 }
 
 export interface IUserAvatar {
-  url: string
-  _id?: Types.ObjectId
+  url: string;
+  id?: Types.ObjectId;
 }

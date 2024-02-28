@@ -11,7 +11,7 @@ export const getAllGames = async (
   try {
     const games = await gamesService.getGames();
 
-    res.json(games);
+    res.sendResponse(games);
   } catch (error) {
     next(error);
   }
@@ -35,7 +35,7 @@ export const getGame = async (
       return res.status(404).send(`Game with id: ${id} not found`);
     }
 
-    res.json(game);
+    res.sendResponse(game);
   } catch (error) {
     next(error);
   }
@@ -49,7 +49,7 @@ export const createGame = async (
   try {
     const game = await gamesService.createGame(req.body);
 
-    res.json(game);
+    res.sendResponse(game);
   } catch (error) {
     next(error);
   }
@@ -73,7 +73,7 @@ export const updateGame = async (
       return res.status(404).send(`Game with id: ${id} not found`);
     }
 
-    res.json(game);
+    res.sendResponse(game);
   } catch (error) {
     next(error);
   }
@@ -107,7 +107,7 @@ export const addUserToGame = async (
 
     await game.populate(Populate.Players);
 
-    res.json(game);
+    res.sendResponse(game);
   } catch (error) {
     next(error);
   }

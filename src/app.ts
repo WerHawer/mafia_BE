@@ -16,6 +16,7 @@ import { createFolderIsNotExist } from './helpers/createFolderIsNotExist';
 import { connectSocket } from './socketIo';
 import { ExpressPeerServer } from 'peer';
 import { Server } from 'socket.io';
+import { responseNormalizeMiddleware } from './middlewares/responseNormalizeMiddleware';
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(cors());
 app.use(morgan('dev'));
+app.use(responseNormalizeMiddleware);
 
 let activeConnections = 0;
 
@@ -60,8 +62,10 @@ peerApp.use('/peerjs', peerServer);
 app.use('/games', gamesRouter);
 app.use('/users', usersRouter);
 app.use('/messages', messagesRouter);
-app.use('/', (req, res) => {
-  return res.status(200).json('Hello from server!');
+app.use('/', (req, res, next) => {
+  res.status(200).json('Hello from server!');
+
+  next();
 });
 
 app.use(errorLogger);

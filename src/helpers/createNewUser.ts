@@ -13,6 +13,5 @@ export const createNewUserObj = (user: IUserCreate): IUser => {
     name,
     friendList: [],
     isOnline: true,
-    avatar: undefined,
   };
 };

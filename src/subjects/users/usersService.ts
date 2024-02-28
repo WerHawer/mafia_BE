@@ -3,16 +3,20 @@ import { IUser } from './usersTypes';
 import { Populate } from '../DBTypes';
 import { Types } from 'mongoose';
 
+const usersOptions = {
+  populate: Populate.Avatar,
+};
+
 export const getUsers = async () =>
-  Users.find({}, undefined, { populate: Populate.Avatar });
+  Users.find({}, undefined, { ...usersOptions, limit: 100 });
 
 export const getUserById = async (id: string) =>
-  Users.findById(id, undefined, { populate: Populate.Avatar });
+  Users.findById(id, undefined, usersOptions);
 
 export const createUser = async (user: IUser) => Users.create(user);
 
 export const updateUser = async (id: string, user: Partial<IUser>) =>
-  Users.findByIdAndUpdate(id, user, { new: true, populate: Populate.Avatar });
+  Users.findByIdAndUpdate(id, user, { ...usersOptions, new: true });
 
 export const uploadUserAvatar = async (avatar: string) =>
   Avatars.create({ url: avatar });
@@ -22,8 +26,8 @@ export const updateUserAvatar = async (
   avatar: { avatar: Types.ObjectId }
 ) =>
   Users.findByIdAndUpdate(id, avatar, {
+    ...usersOptions,
     new: true,
-    populate: Populate.Avatar,
   });
 
 export const deleteUser = async (id: string) => Users.findByIdAndDelete(id);
