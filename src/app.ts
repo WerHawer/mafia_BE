@@ -1,5 +1,4 @@
 import express from 'express';
-import peerExpress from 'express';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
@@ -21,18 +20,17 @@ import { responseNormalizeMiddleware } from './middlewares/responseNormalizeMidd
 dotenv.config();
 
 const app = express();
-const peerApp = peerExpress();
 const httpServer = createServer(app);
-const httpPeerServer = createServer(peerApp);
-const io = new Server(httpServer);
-const peerServer = ExpressPeerServer(httpPeerServer, {
-  path: '/video',
+const io = new Server(httpServer, {
+  cors: {
+    origin: '*',
+  },
 });
+const peerServer = ExpressPeerServer(httpServer, { path: '/mafia' });
 
 connectSocket(io);
 
 const port = process.env.PORT || 5051;
-const peerPort = process.env.PEER_PORT || 5001;
 const mongoURI = process.env.DB_HOST;
 
 app.use(express.urlencoded({ extended: false }));
@@ -47,18 +45,18 @@ let activeConnections = 0;
 peerServer.on('connection', (client) => {
   activeConnections++;
   console.log(
-    `Client id: ${client.getId()} connected. Total connections: ${activeConnections}`
+    `PEER CONNECT id: ${client.getId()}. Total connections: ${activeConnections}`
   );
 });
 
 peerServer.on('disconnect', (client) => {
   activeConnections--;
   console.log(
-    `Client id: ${client.getId()} disconnected. Total connections: ${activeConnections}`
+    `PEER DISCONNECT id: ${client.getId()}. Total connections: ${activeConnections}`
   );
 });
 
-peerApp.use('/peerjs', peerServer);
+app.use('/peerjs', peerServer);
 app.use('/games', gamesRouter);
 app.use('/users', usersRouter);
 app.use('/messages', messagesRouter);
@@ -82,7 +80,3 @@ connection
   .catch((err) => {
     console.log(err);
   });
-
-httpPeerServer.listen(peerPort, () => {
-  console.log(`Peer server is running on port: ${peerPort}`);
-});
