@@ -12,7 +12,7 @@ import { errorHandler } from './middlewares/errorHandler';
 import { createServer } from 'http';
 import { uploadDir } from './storage';
 import { createFolderIsNotExist } from './helpers/createFolderIsNotExist';
-import { connectSocket } from './socketIo';
+import { wsFlow } from './wsFlow';
 import { ExpressPeerServer } from 'peer';
 import { Server } from 'socket.io';
 import { responseNormalizeMiddleware } from './middlewares/responseNormalizeMiddleware';
@@ -28,7 +28,7 @@ const io = new Server(httpServer, {
 });
 const peerServer = ExpressPeerServer(httpServer, { path: '/mafia' });
 
-connectSocket(io);
+wsFlow(io, peerServer);
 
 const port = process.env.PORT || 5051;
 const mongoURI = process.env.DB_HOST;
@@ -39,22 +39,6 @@ app.use(cookieParser());
 app.use(cors());
 app.use(morgan('dev'));
 app.use(responseNormalizeMiddleware);
-
-let activeConnections = 0;
-
-peerServer.on('connection', (client) => {
-  activeConnections++;
-  console.log(
-    `PEER CONNECT id: ${client.getId()}. Total connections: ${activeConnections}`
-  );
-});
-
-peerServer.on('disconnect', (client) => {
-  activeConnections--;
-  console.log(
-    `PEER DISCONNECT id: ${client.getId()}. Total connections: ${activeConnections}`
-  );
-});
 
 app.use('/peerjs', peerServer);
 app.use('/games', gamesRouter);
