@@ -6,7 +6,7 @@ export interface IUser {
   nikName?: string;
   friendList: [];
   isOnline: true;
-  avatar?: IUserAvatar[];
+  avatar?: IUserAvatar[] | Types.ObjectId[];
   password?: string;
   // history: [],
 }
@@ -16,10 +16,6 @@ export interface IUserCreate {
   name: string;
   nikName?: string;
   password: string;
-}
-
-export interface IUserDTO extends Omit<IUser, 'avatar'> {
-  avatar: IUserAvatar;
 }
 
 export interface IUserAvatar {

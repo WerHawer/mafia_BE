@@ -20,6 +20,8 @@ enum wsEvents {
   disconnect = 'disconnect',
 }
 
+const streamsMap = new Map<string, string>();
+
 export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
   let activeConnections = 0;
 
@@ -32,11 +34,14 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
 
   peerServer.on(wsEvents.disconnect, (client) => {
     activeConnections -= 1;
+    const clientId = client.getId();
+    const roomId = streamsMap.get(clientId);
+
     console.log(
-      `PEER DISCONNECT id: ${client.getId()}. Total connections: ${activeConnections}`
+      `PEER DISCONNECT id: ${clientId}. Total connections: ${activeConnections}`
     );
 
-    io.emit(wsEvents.peerDisconnect, client.getId());
+    io.to(roomId).emit(wsEvents.peerDisconnect, clientId);
   });
 
   io.on(wsEvents.connection, async (socket) => {
@@ -57,10 +62,14 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
 
     console.log(`SOCKET User connected! Hi ${user.name}`);
 
-    socket.on(wsEvents.roomConnection, async (roomId, userId) => {
+    socket.on(wsEvents.roomConnection, async (roomId, userId, streamId) => {
       const roomMessages = await messagesService.getRoomMessages(roomId);
 
       socket.join(roomId);
+
+      if (streamId) {
+        streamsMap.set(streamId, roomId);
+      }
 
       socket.to(roomId).emit(wsEvents.roomConnection, userId);
 

@@ -4,6 +4,8 @@ import { idFormatValidation } from '../../helpers/idFormatValidation';
 import { createNewUserObj } from '../../helpers/createNewUser';
 import { deleteFileFromAWS, uploadFileToAWS } from '../../awsSdk';
 import { Populate } from '../DBTypes';
+import { dataNormalize } from '../../helpers/dataNormalize';
+import { IUserAvatar } from './usersTypes';
 
 export const getAllUsers = async (
   req: Request,
@@ -104,7 +106,7 @@ export const updateUserAvatar = async (
     const avatarUrl = await uploadFileToAWS(path, dateName);
     const avatar = await userService.uploadUserAvatar(avatarUrl);
 
-    const prevAvatar = user.avatar?.[0];
+    const prevAvatar = user.avatar?.[0] as IUserAvatar;
 
     if (prevAvatar) {
       await userService.deleteUserAvatar(`${prevAvatar.id}`);
@@ -112,19 +114,16 @@ export const updateUserAvatar = async (
       await deleteFileFromAWS(prevAvatarName);
     }
 
-    user.avatar = [
-      {
-        id: avatar._id,
-        url: avatar.url,
-      },
-    ];
+    user.avatar = [avatar._id];
 
     await user.save();
     await user.populate(Populate.Avatar);
 
-    res.sendResponse({
+    const normalizedUser = dataNormalize(user);
+
+    res.json({
       description,
-      user,
+      user: normalizedUser,
       message: 'Avatar updated successfully',
     });
   } catch (error) {
