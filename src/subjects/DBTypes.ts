@@ -9,4 +9,6 @@ export enum Populate {
   Players = 'players',
   Avatar = 'avatar',
   Sender = 'sender',
+  GM = 'gm',
+  Owner = 'owner',
 }

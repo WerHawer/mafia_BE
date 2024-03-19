@@ -2,6 +2,7 @@ import * as gamesService from './gamesService';
 import { NextFunction, Response, Request } from 'express';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
 import { Populate } from '../DBTypes';
+import { gamePopulateOption } from './gamesService';
 
 export const getAllGames = async (
   req: Request,
@@ -48,6 +49,8 @@ export const createGame = async (
 ) => {
   try {
     const game = await gamesService.createGame(req.body);
+
+    await game.populate(gamePopulateOption);
 
     res.sendResponse(game);
   } catch (error) {

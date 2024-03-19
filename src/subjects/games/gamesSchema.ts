@@ -1,10 +1,9 @@
-import { model, Schema, Types } from 'mongoose'
-import { IGame } from './gamesTypes'
-import { DBSubject } from '../DBTypes'
+import { model, Schema, Types } from 'mongoose';
+import { IGame } from './gamesTypes';
+import { DBSubject } from '../DBTypes';
 
 const gamesSchema = new Schema<IGame>({
-  name: { type: String, required: true },
-  owner: { type: String, required: true },
+  owner: { type: String, ref: DBSubject.Users, required: true },
   players: {
     type: [Types.ObjectId],
     ref: DBSubject.Users,
@@ -13,8 +12,17 @@ const gamesSchema = new Schema<IGame>({
   password: String,
   isPrivate: Boolean,
   isActive: { type: Boolean, required: true },
-  description: String,
-  img: String,
-})
+  day: { type: Number, required: true },
+  gm: { type: String, ref: DBSubject.Users, required: true },
+  mafia: [Types.ObjectId],
+  citizens: [Types.ObjectId],
+  cherif: Types.ObjectId || null,
+  doctor: Types.ObjectId || null,
+  maniac: Types.ObjectId || null,
+  slut: Types.ObjectId || null,
+  killed: [Types.ObjectId],
+  startTime: Number || null,
+  finishTime: Number || null,
+});
 
-export const Games = model<IGame>(DBSubject.Games, gamesSchema)
+export const Games = model<IGame>(DBSubject.Games, gamesSchema);
