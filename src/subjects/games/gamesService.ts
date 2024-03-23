@@ -1,16 +1,15 @@
 import { Games } from './gamesSchema';
 import { IGame } from './gamesTypes';
-import { Populate } from '../DBTypes';
 
-export const gamePopulateOption = [
-  Populate.Players,
-  Populate.GM,
-  Populate.Owner,
-];
-
-const gamesOptions = {
-  populate: gamePopulateOption,
-};
+// export const gamePopulateOption = [
+//   Populate.Players,
+//   Populate.GM,
+//   Populate.Owner,
+// ];
+//
+// const gamesOptions = {
+//   populate: gamePopulateOption,
+// };
 
 export const getGames = async () => Games.find({}, undefined, { limit: 100 });
 
