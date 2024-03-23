@@ -19,10 +19,12 @@ const gamesSchema = new Schema<IGame>({
   cherif: Types.ObjectId || null,
   doctor: Types.ObjectId || null,
   maniac: Types.ObjectId || null,
-  slut: Types.ObjectId || null,
+  prostitute: Types.ObjectId || null,
   killed: [Types.ObjectId],
   startTime: Number || null,
   finishTime: Number || null,
+  creatingTime: { type: Number, required: true },
+  gameType: { type: String, required: true },
 });
 
 export const Games = model<IGame>(DBSubject.Games, gamesSchema);

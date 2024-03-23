@@ -1,16 +1,21 @@
 import * as gamesService from './gamesService';
 import { NextFunction, Response, Request } from 'express';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
-import { Populate } from '../DBTypes';
 import { gamePopulateOption } from './gamesService';
 
-export const getAllGames = async (
+export const getGames = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
+  const isActive = req.query.active === 'true';
+
+  const requestHandler = isActive
+    ? gamesService.getActiveGames
+    : gamesService.getGames;
+
   try {
-    const games = await gamesService.getGames();
+    const games = await requestHandler();
 
     res.sendResponse(games);
   } catch (error) {
@@ -107,8 +112,6 @@ export const addUserToGame = async (
     game.players ? game.players.push(userId) : (game.players = [userId]);
 
     await game.save();
-
-    await game.populate(Populate.Players);
 
     res.sendResponse(game);
   } catch (error) {

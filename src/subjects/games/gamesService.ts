@@ -12,16 +12,16 @@ const gamesOptions = {
   populate: gamePopulateOption,
 };
 
-export const getGames = async () =>
-  Games.find({}, undefined, { ...gamesOptions, limit: 100 });
+export const getGames = async () => Games.find({}, undefined, { limit: 100 });
 
-export const getGame = async (id: string) =>
-  Games.findById(id, undefined, gamesOptions);
+export const getActiveGames = async () =>
+  Games.find({ isActive: true }, undefined, { limit: 100 });
+
+export const getGame = async (id: string) => Games.findById(id);
 
 export const createGame = async (game: IGame) => Games.create(game);
 
 export const updateGame = async (id: string, game: Partial<IGame>) =>
   Games.findByIdAndUpdate(id, game, {
-    ...gamesOptions,
     new: true,
   });

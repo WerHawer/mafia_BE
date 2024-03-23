@@ -1,5 +1,10 @@
 import { IUser } from '../users/usersTypes';
 
+export enum GameType {
+  Standard = 'standard',
+  Expand = 'expand',
+}
+
 export interface IGame {
   owner: string;
   players: string[];
@@ -13,10 +18,12 @@ export interface IGame {
   cherif: string | null;
   doctor: string | null;
   maniac?: string | null;
-  slut?: string | null;
+  prostitute?: string | null;
   killed: string[];
   startTime: number | null;
   finishTime: number | null;
+  creatingTime: number;
+  gameType: GameType;
 }
 
 export interface IGameDTO extends Omit<IGame, 'players'> {
