@@ -5,12 +5,13 @@ import { dataNormalize } from './helpers/dataNormalize';
 import { messagesPopulate } from './subjects/messages/messagesService';
 import { PeerServerEvents } from 'peer';
 
-enum wsEvents {
+export enum wsEvents {
   connection = 'connection',
   connectionError = 'connect_error',
   peerConnection = 'peerConnection',
   peerDisconnect = 'peerDisconnect',
   roomConnection = 'roomConnection',
+  roomLeave = 'roomLeave',
   roomDisconnect = 'roomDisconnect',
   userConnectedCount = 'userConnectedCount',
   messagesGetAll = 'messagesGetAll',
@@ -18,6 +19,7 @@ enum wsEvents {
   messageSend = 'messageSend',
   messageSendPrivate = 'messageSendPrivate',
   disconnect = 'disconnect',
+  gameCreated = 'gameCreated',
 }
 
 const streamsMap = new Map<string, string>();
@@ -45,22 +47,19 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
   });
 
   io.on(wsEvents.connection, async (socket) => {
-    const userId = socket.handshake.query.user as string;
-    const user = await userService.getUserById(userId);
+    console.log(
+      `SOCKET User connected! connected users: ${io.sockets.sockets.size}`
+    );
 
-    if (!user) {
-      socket.disconnect(true);
-      socket.emit(wsEvents.connectionError, 'User not found');
+    io.emit(
+      wsEvents.connection,
+      `connect success. Connected users: ${io.sockets.sockets.size}`
+    );
+    socket.broadcast.emit(wsEvents.userConnectedCount, io.sockets.sockets.size);
 
-      console.log('User not found');
-
-      return;
-    }
-
-    io.emit(wsEvents.connection, `${user.name} connected successfully`);
-    io.emit(wsEvents.userConnectedCount, io.sockets.sockets.size);
-
-    console.log(`SOCKET User connected! Hi ${user.name}`);
+    socket.on(wsEvents.userConnectedCount, async () => {
+      io.emit(wsEvents.userConnectedCount, io.sockets.sockets.size);
+    });
 
     socket.on(wsEvents.roomConnection, async (roomId, userId, streamId) => {
       const roomMessages = await messagesService.getRoomMessages(roomId);
@@ -78,9 +77,16 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
       console.log(`User ${userId} joined room ${roomId}`);
     });
 
+    socket.on(wsEvents.roomLeave, async (roomId, userId) => {
+      socket.leave(roomId);
+
+      console.log(`User ${userId} left room ${roomId}`);
+    });
+
     socket.on(wsEvents.messagesGetAll, async () => {
       const allMessages = await (async () => {
         const messages = await messagesService.getAllPublicMessages();
+
         return dataNormalize(messages);
       })();
 
@@ -106,7 +112,10 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
     socket.on(wsEvents.disconnect, () => {
       io.emit(wsEvents.userConnectedCount, io.sockets.sockets.size);
 
-      console.log('SOCKET User disconnected');
+      console.log(
+        'SOCKET User disconnected. connected users:',
+        io.sockets.sockets.size
+      );
     });
   });
 };

@@ -16,12 +16,18 @@ import { wsFlow } from './wsFlow';
 import { ExpressPeerServer } from 'peer';
 import { Server } from 'socket.io';
 import { responseNormalizeMiddleware } from './middlewares/responseNormalizeMiddleware';
+import { responseWithIo } from './middlewares/responseWithIo';
+import { responseErrorMiddleware } from './middlewares/responseErrorMiddleware';
+import loginRouter from './routes/loginRouter';
+import { auth } from './middlewares/auth';
+import registrationRouter from './routes/registrationRouter';
 
 dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
+  allowEIO3: true,
   cors: {
     origin: '*',
   },
@@ -39,14 +45,21 @@ app.use(cookieParser());
 app.use(cors());
 app.use(morgan('dev'));
 app.use(responseNormalizeMiddleware);
+app.use(responseErrorMiddleware);
+app.use(responseWithIo(io));
 
 app.use('/peerjs', peerServer);
+app.use('/login', loginRouter);
+app.use('/registration', registrationRouter);
+
+app.use(auth);
+app.get('/auth', (req, res) => {
+  res.sendResponse({ message: 'Authenticated' });
+});
+
 app.use('/games', gamesRouter);
 app.use('/users', usersRouter);
 app.use('/messages', messagesRouter);
-app.get('/', (req, res) => {
-  res.status(200).json('Hello from server!');
-});
 
 app.use(errorLogger);
 app.use(errorHandler);

@@ -1,7 +1,7 @@
 import * as gamesService from './gamesService';
 import { NextFunction, Response, Request } from 'express';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
-import { gamePopulateOption } from './gamesService';
+import { wsEvents } from '../../wsFlow';
 
 export const getGames = async (
   req: Request,
@@ -55,9 +55,7 @@ export const createGame = async (
   try {
     const game = await gamesService.createGame(req.body);
 
-    await game.populate(gamePopulateOption);
-
-    res.sendResponse(game);
+    res.sendResponse(game).io.emit(wsEvents.gameCreated);
   } catch (error) {
     next(error);
   }

@@ -6,6 +6,8 @@ import { deleteFileFromAWS, uploadFileToAWS } from '../../awsSdk';
 import { Populate } from '../DBTypes';
 import { dataNormalize } from '../../helpers/dataNormalize';
 import { IUserAvatar } from './usersTypes';
+import { createToken } from '../../helpers/createToken';
+import { comparePassword } from '../../helpers/comparePassword';
 
 export const getAllUsers = async (
   req: Request,
@@ -28,13 +30,17 @@ export const getUserById = async (
 ) => {
   const { id } = req.params;
 
-  if (!idFormatValidation(id)) return res.status(400).send('Invalid ID format');
+  if (!idFormatValidation(id))
+    return res.sendError({ message: 'Invalid ID format' });
 
   try {
     const user = await userService.getUserById(id);
 
     if (!user) {
-      return res.status(404).send(`User with id: ${id} not found`);
+      return res.sendError({
+        message: `User with id: ${id} not found`,
+        status: 404,
+      });
     }
 
     res.sendResponse(user);
@@ -49,14 +55,64 @@ export const createUser = async (
   next: NextFunction
 ) => {
   const newUser = createNewUserObj(req.body);
+  const { email } = newUser;
+
+  if (!email) {
+    return res.sendError({
+      message: 'Email is required',
+      status: 400,
+      field: 'email',
+    });
+  }
+
+  const userByEmail = await userService.getUserByEmail(email);
+
+  if (userByEmail) {
+    return res.sendError({
+      message: 'User with this email already exists',
+      status: 400,
+      field: 'email',
+    });
+  }
 
   try {
     const user = await userService.createUser(newUser);
+    const { id, name } = user;
 
-    res.sendResponse(user);
+    const token = createToken({ id, name });
+
+    res.sendResponse({ user, token }, 201);
   } catch (error) {
     next(error);
   }
+};
+
+export const loginUser = async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+  const user = await userService.getUserByEmail(email);
+
+  if (!user) {
+    return res.sendError({
+      message: 'User with this email does not exist',
+      status: 400,
+      field: 'email',
+    });
+  }
+
+  const isPasswordCorrect = comparePassword(password, user.password);
+
+  if (!isPasswordCorrect) {
+    return res.sendError({
+      message: 'Password is incorrect',
+      status: 400,
+      field: 'password',
+    });
+  }
+
+  const { id, name } = user;
+  const token = createToken({ id, name });
+
+  res.sendResponse({ user, token });
 };
 
 export const updateUser = async (
@@ -119,11 +175,9 @@ export const updateUserAvatar = async (
     await user.save();
     await user.populate(Populate.Avatar);
 
-    const normalizedUser = dataNormalize(user);
-
-    res.json({
+    res.sendResponse({
       description,
-      user: normalizedUser,
+      user,
       message: 'Avatar updated successfully',
     });
   } catch (error) {

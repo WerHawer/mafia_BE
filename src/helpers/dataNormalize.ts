@@ -1,15 +1,15 @@
 import { Document } from 'mongoose';
+import { dataToRegularObj } from './dataToRegularObj';
 
 const keysToDelete = ['password', '__v'];
 
 type DataWithId = { id?: string; [key: string]: any };
+type Data = Document | Record<string, any>;
 
 export const dataNormalize = (
-  data: Document | Document[]
+  data: Data | Data[]
 ): DataWithId | DataWithId[] => {
-  const objectData = Array.isArray(data)
-    ? data.map((document) => document.toObject() as Record<string, any>)
-    : data.toObject();
+  const objectData = dataToRegularObj(data);
 
   const normalize = (data: any): any => {
     if (Array.isArray(data)) {

@@ -13,6 +13,9 @@ export const getUsers = async () =>
 export const getUserById = async (id: string) =>
   Users.findById(id, undefined, usersOptions);
 
+export const getUserByEmail = async (email: string) =>
+  Users.findOne({ email }, undefined, usersOptions);
+
 export const createUser = async (user: IUser) => Users.create(user);
 
 export const updateUser = async (id: string, user: Partial<IUser>) =>
@@ -20,15 +23,6 @@ export const updateUser = async (id: string, user: Partial<IUser>) =>
 
 export const uploadUserAvatar = async (avatar: string) =>
   Avatars.create({ url: avatar });
-
-export const updateUserAvatar = async (
-  id: string,
-  avatar: { avatar: Types.ObjectId }
-) =>
-  Users.findByIdAndUpdate(id, avatar, {
-    ...usersOptions,
-    new: true,
-  });
 
 export const deleteUser = async (id: string) => Users.findByIdAndDelete(id);
 
