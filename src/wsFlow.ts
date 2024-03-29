@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import * as userService from './subjects/users/usersService';
+import * as gamesService from './subjects/games/gamesService';
 import * as messagesService from './subjects/messages/messagesService';
 import { dataNormalize } from './helpers/dataNormalize';
 import { messagesPopulate } from './subjects/messages/messagesService';
@@ -12,17 +12,16 @@ export enum wsEvents {
   peerDisconnect = 'peerDisconnect',
   roomConnection = 'roomConnection',
   roomLeave = 'roomLeave',
-  roomDisconnect = 'roomDisconnect',
   userConnectedCount = 'userConnectedCount',
   messagesGetAll = 'messagesGetAll',
   messagesGetRoom = 'messagesGetRoom',
   messageSend = 'messageSend',
   messageSendPrivate = 'messageSendPrivate',
   disconnect = 'disconnect',
-  gameCreated = 'gameCreated',
+  updateGame = 'updateGame',
 }
 
-const streamsMap = new Map<string, string>();
+const streamsMap = new Map<string, Record<'roomId' | 'userId', string>>();
 
 export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
   let activeConnections = 0;
@@ -34,16 +33,19 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
     );
   });
 
-  peerServer.on(wsEvents.disconnect, (client) => {
+  peerServer.on(wsEvents.disconnect, async (client) => {
     activeConnections -= 1;
     const clientId = client.getId();
-    const roomId = streamsMap.get(clientId);
+    const { roomId, userId } = streamsMap.get(clientId);
 
     console.log(
       `PEER DISCONNECT id: ${clientId}. Total connections: ${activeConnections}`
     );
 
     io.to(roomId).emit(wsEvents.peerDisconnect, clientId);
+
+    const game = await gamesService.removeGamePlayers(roomId, userId);
+    io.emit(wsEvents.updateGame, dataNormalize(game));
   });
 
   io.on(wsEvents.connection, async (socket) => {
@@ -62,16 +64,15 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
     });
 
     socket.on(wsEvents.roomConnection, async (roomId, userId, streamId) => {
-      const roomMessages = await messagesService.getRoomMessages(roomId);
-
       socket.join(roomId);
 
       if (streamId) {
-        streamsMap.set(streamId, roomId);
+        streamsMap.set(streamId, { roomId, userId });
       }
 
-      socket.to(roomId).emit(wsEvents.roomConnection, userId);
+      socket.to(roomId).emit(wsEvents.roomConnection, streamId);
 
+      const roomMessages = await messagesService.getRoomMessages(roomId);
       io.to(roomId).emit(wsEvents.messagesGetRoom, dataNormalize(roomMessages));
 
       console.log(`User ${userId} joined room ${roomId}`);

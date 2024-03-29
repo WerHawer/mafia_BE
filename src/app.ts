@@ -54,7 +54,7 @@ app.use('/registration', registrationRouter);
 
 app.use(auth);
 app.get('/auth', (req, res) => {
-  res.sendResponse({ message: 'Authenticated' });
+  res.sendResponse({ message: 'Authenticated', user: req.user });
 });
 
 app.use('/games', gamesRouter);

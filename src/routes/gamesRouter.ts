@@ -8,5 +8,6 @@ router.get('/:id', gamesController.getGame);
 router.post('/', gamesController.createGame);
 router.patch('/:id', gamesController.updateGame);
 router.patch('/:id/addUser/:userId', gamesController.addUserToGame);
+router.patch('/:id/removeUser/:userId', gamesController.removeUserFromGame);
 
 export default router;

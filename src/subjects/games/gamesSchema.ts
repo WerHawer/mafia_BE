@@ -3,17 +3,16 @@ import { IGame } from './gamesTypes';
 import { DBSubject } from '../DBTypes';
 
 const gamesSchema = new Schema<IGame>({
-  owner: { type: String, ref: DBSubject.Users, required: true },
+  owner: { type: String, required: true },
   players: {
-    type: [Types.ObjectId],
-    ref: DBSubject.Users,
+    type: [String],
     required: true,
   },
   password: String,
   isPrivate: Boolean,
   isActive: { type: Boolean, required: true },
   day: { type: Number, required: true },
-  gm: { type: String, ref: DBSubject.Users, required: true },
+  gm: { type: String, required: true },
   mafia: [Types.ObjectId],
   citizens: [Types.ObjectId],
   cherif: Types.ObjectId || null,

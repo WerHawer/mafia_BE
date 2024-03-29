@@ -2,6 +2,7 @@ import * as gamesService from './gamesService';
 import { NextFunction, Response, Request } from 'express';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
 import { wsEvents } from '../../wsFlow';
+import { dataNormalize } from '../../helpers/dataNormalize';
 
 export const getGames = async (
   req: Request,
@@ -55,7 +56,11 @@ export const createGame = async (
   try {
     const game = await gamesService.createGame(req.body);
 
-    res.sendResponse(game).io.emit(wsEvents.gameCreated);
+    if (!game) {
+      return res.sendError({ message: 'Game not created', status: 400 });
+    }
+
+    res.sendResponse(game).io.emit(wsEvents.updateGame, dataNormalize(game));
   } catch (error) {
     next(error);
   }
@@ -93,25 +98,52 @@ export const addUserToGame = async (
   const { id, userId } = req.params;
 
   if (!idFormatValidation(id)) {
-    return res.status(400).send('Invalid Game ID format');
+    return res.sendError({ message: 'Invalid Game ID format', status: 400 });
   }
 
   if (!idFormatValidation(userId)) {
-    return res.status(400).send('Invalid User ID format');
+    return res.sendError({ message: 'Invalid User ID format', status: 400 });
   }
 
   try {
-    const game = await gamesService.getGame(id);
+    const game = await gamesService.addGamePlayers(id, userId);
 
     if (!game) {
-      return res.status(404).send(`Game with id: ${id} not found`);
+      return res.sendError({ message: 'Game not found', status: 404 });
     }
 
-    game.players ? game.players.push(userId) : (game.players = [userId]);
+    res.sendResponse(game).io.emit(wsEvents.updateGame, dataNormalize(game));
+  } catch (error) {
+    next(error);
+  }
+};
 
-    await game.save();
+export const removeUserFromGame = async (
+  req: Request<any, any, { userId: string }>,
+  res: Response,
+  next: NextFunction
+) => {
+  const { id, userId } = req.params;
 
-    res.sendResponse(game);
+  if (!idFormatValidation(id)) {
+    return res.sendError({ message: 'Invalid Game ID format', status: 400 });
+  }
+
+  if (!idFormatValidation(userId)) {
+    return res.sendError({ message: 'Invalid User ID format', status: 400 });
+  }
+
+  try {
+    const game = await gamesService.removeGamePlayers(id, userId);
+
+    if (!game) {
+      return res.sendError({ message: 'Game not found', status: 404 });
+    }
+
+    res
+      .sendResponse(game)
+      .io.to(id)
+      .emit(wsEvents.updateGame, dataNormalize(game));
   } catch (error) {
     next(error);
   }
