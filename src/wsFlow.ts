@@ -13,7 +13,6 @@ export enum wsEvents {
   roomConnection = 'roomConnection',
   roomLeave = 'roomLeave',
   userConnectedCount = 'userConnectedCount',
-  messagesGetAll = 'messagesGetAll',
   messagesGetRoom = 'messagesGetRoom',
   messageSend = 'messageSend',
   messageSendPrivate = 'messageSendPrivate',
@@ -63,12 +62,10 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
       io.emit(wsEvents.userConnectedCount, io.sockets.sockets.size);
     });
 
-    socket.on(wsEvents.roomConnection, async (roomId, userId, streamId) => {
+    socket.on(wsEvents.roomConnection, async ([roomId, userId, streamId]) => {
       socket.join(roomId);
 
-      if (streamId) {
-        streamsMap.set(streamId, { roomId, userId });
-      }
+      streamsMap.set(streamId, { roomId, userId });
 
       socket.to(roomId).emit(wsEvents.roomConnection, streamId);
 
@@ -78,27 +75,17 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
       console.log(`User ${userId} joined room ${roomId}`);
     });
 
-    socket.on(wsEvents.roomLeave, async (roomId, userId) => {
+    socket.on(wsEvents.roomLeave, async ([roomId, userId]) => {
       socket.leave(roomId);
 
       console.log(`User ${userId} left room ${roomId}`);
-    });
-
-    socket.on(wsEvents.messagesGetAll, async () => {
-      const allMessages = await (async () => {
-        const messages = await messagesService.getAllPublicMessages();
-
-        return dataNormalize(messages);
-      })();
-
-      socket.emit(wsEvents.messagesGetAll, allMessages);
     });
 
     socket.on(wsEvents.messageSend, async (message) => {
       const savedMessage = await messagesService.createMessage(message);
       await savedMessage.populate(messagesPopulate);
 
-      socket.broadcast.emit(wsEvents.messageSend, dataNormalize(savedMessage));
+      io.emit(wsEvents.messageSend, dataNormalize(savedMessage));
     });
 
     socket.on(wsEvents.messageSendPrivate, async (message) => {

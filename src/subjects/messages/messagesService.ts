@@ -12,13 +12,18 @@ export const messagesPopulate = {
 const messagesOptions = {
   limit: 100,
   populate: messagesPopulate,
+  sort: { createdAt: -1 },
 };
 
 export const getAllPublicMessages = async () =>
   await Messages.find({ 'to.type': 'all' }, undefined, messagesOptions);
 
 export const getPrivateMessages = async (id: string, sender: string) =>
-  await Messages.find({ 'to.type': 'user', 'to.id': id, sender });
+  await Messages.find(
+    { 'to.type': 'user', 'to.id': id, sender },
+    undefined,
+    messagesOptions
+  );
 
 export const getRoomMessages = async (id: string) =>
   await Messages.find(

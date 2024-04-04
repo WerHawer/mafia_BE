@@ -1,6 +1,6 @@
-import { model, Schema } from 'mongoose'
-import { IMessage } from './messagesTypes'
-import { DBSubject } from '../DBTypes'
+import { model, Schema } from 'mongoose';
+import { IMessage } from './messagesTypes';
+import { DBSubject } from '../DBTypes';
 
 const messagesSchema = new Schema<IMessage>({
   text: { type: String, required: true },
@@ -12,8 +12,8 @@ const messagesSchema = new Schema<IMessage>({
     },
     id: String,
   },
-  date: Date,
+  createdAt: { type: Number, required: true },
   isRead: { type: Boolean, required: true },
-})
+});
 
-export const Messages = model<IMessage>(DBSubject.Messages, messagesSchema)
+export const Messages = model<IMessage>(DBSubject.Messages, messagesSchema);
