@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import * as messagesService from './messagesService';
+import { messagesPopulate } from './messagesService';
+import { dataNormalize } from '../../helpers/dataNormalize';
+import { wsEvents } from '../../wsFlow';
 
 export const createMessage = async (
   req: Request,
@@ -7,9 +10,19 @@ export const createMessage = async (
   next: NextFunction
 ) => {
   try {
-    const message = await messagesService.createMessage(req.body);
+    const savedMessage = await messagesService.createMessage(req.body);
 
-    res.sendResponse(message);
+    await savedMessage.populate(messagesPopulate);
+    const event = wsEvents.messageSend;
+    const data = dataNormalize(savedMessage);
+
+    if (savedMessage.to.type === 'all') {
+      res.io.emit(event, data);
+
+      return;
+    }
+
+    res.io.to(savedMessage.to.id).emit(event, data);
   } catch (error) {
     next(error);
   }

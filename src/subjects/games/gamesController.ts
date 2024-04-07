@@ -134,10 +134,14 @@ export const removeUserFromGame = async (
   }
 
   try {
-    const game = await gamesService.removeGamePlayers(id, userId);
+    let game = await gamesService.removeGamePlayers(id, userId);
 
     if (!game) {
       return res.sendError({ message: 'Game not found', status: 404 });
+    }
+
+    if (game.players.length === 0) {
+      game = await gamesService.updateGame(id, { isActive: false });
     }
 
     res
@@ -147,4 +151,21 @@ export const removeUserFromGame = async (
   } catch (error) {
     next(error);
   }
+};
+
+export const removeUserFromGameWithSocket = async (
+  gameId: string,
+  userId: string
+) => {
+  let game = await gamesService.removeGamePlayers(gameId, userId);
+
+  if (userId === game.gm && game.players.length > 0) {
+    game = await gamesService.updateGame(gameId, { gm: game.players[0] });
+  }
+
+  // if (game.players.length === 0) {
+  //   game = await gamesService.updateGame(gameId, { isActive: false });
+  // }
+
+  return game;
 };

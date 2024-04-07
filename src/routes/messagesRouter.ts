@@ -3,7 +3,6 @@ import * as messagesController from '../subjects/messages/messagesController';
 
 const router = express.Router();
 
-router.post('/', messagesController.createMessage);
 router.get('/', messagesController.getAllMessages);
 router.get('/private/:id', messagesController.getPrivateMessages);
 router.get('/room/:id', messagesController.getRoomMessages);

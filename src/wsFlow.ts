@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import * as gamesService from './subjects/games/gamesService';
+import * as gamesController from './subjects/games/gamesController';
 import * as messagesService from './subjects/messages/messagesService';
 import { dataNormalize } from './helpers/dataNormalize';
 import { messagesPopulate } from './subjects/messages/messagesService';
@@ -7,23 +7,18 @@ import { PeerServerEvents } from 'peer';
 
 export enum wsEvents {
   connection = 'connection',
-  connectionError = 'connect_error',
-  peerConnection = 'peerConnection',
   peerDisconnect = 'peerDisconnect',
   roomConnection = 'roomConnection',
   roomLeave = 'roomLeave',
-  userConnectedCount = 'userConnectedCount',
-  messagesGetRoom = 'messagesGetRoom',
   messageSend = 'messageSend',
-  messageSendPrivate = 'messageSendPrivate',
   disconnect = 'disconnect',
+  socketDisconnect = 'socketDisconnect',
   updateGame = 'updateGame',
 }
 
-const streamsMap = new Map<string, Record<'roomId' | 'userId', string>>();
-
 export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
   let activeConnections = 0;
+  const streamsMap = new Map<string, Record<'roomId' | 'userId', string>>();
 
   peerServer.on(wsEvents.connection, (client) => {
     activeConnections += 1;
@@ -43,7 +38,11 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
 
     io.to(roomId).emit(wsEvents.peerDisconnect, clientId);
 
-    const game = await gamesService.removeGamePlayers(roomId, userId);
+    const game = await gamesController.removeUserFromGameWithSocket(
+      roomId,
+      userId
+    );
+
     io.emit(wsEvents.updateGame, dataNormalize(game));
   });
 
@@ -52,25 +51,15 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
       `SOCKET User connected! connected users: ${io.sockets.sockets.size}`
     );
 
-    io.emit(
-      wsEvents.connection,
-      `connect success. Connected users: ${io.sockets.sockets.size}`
-    );
-    socket.broadcast.emit(wsEvents.userConnectedCount, io.sockets.sockets.size);
-
-    socket.on(wsEvents.userConnectedCount, async () => {
-      io.emit(wsEvents.userConnectedCount, io.sockets.sockets.size);
+    io.emit(wsEvents.connection, {
+      message: `connect success. Connected users: ${io.sockets.sockets.size}`,
+      connectedUsers: io.sockets.sockets.size,
     });
 
     socket.on(wsEvents.roomConnection, async ([roomId, userId, streamId]) => {
       socket.join(roomId);
-
       streamsMap.set(streamId, { roomId, userId });
-
       socket.to(roomId).emit(wsEvents.roomConnection, streamId);
-
-      const roomMessages = await messagesService.getRoomMessages(roomId);
-      io.to(roomId).emit(wsEvents.messagesGetRoom, dataNormalize(roomMessages));
 
       console.log(`User ${userId} joined room ${roomId}`);
     });
@@ -84,21 +73,20 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
     socket.on(wsEvents.messageSend, async (message) => {
       const savedMessage = await messagesService.createMessage(message);
       await savedMessage.populate(messagesPopulate);
+      const event = wsEvents.messageSend;
+      const data = dataNormalize(savedMessage);
 
-      io.emit(wsEvents.messageSend, dataNormalize(savedMessage));
-    });
+      if (message.to.type === 'all') {
+        io.emit(event, data);
 
-    socket.on(wsEvents.messageSendPrivate, async (message) => {
-      const savedMessage = await messagesService.createMessage(message);
-      await savedMessage.populate(messagesPopulate);
+        return;
+      }
 
-      socket
-        .to(message.to.id)
-        .emit(wsEvents.messageSendPrivate, dataNormalize(savedMessage));
+      io.to(message.to.id).emit(event, data);
     });
 
     socket.on(wsEvents.disconnect, () => {
-      io.emit(wsEvents.userConnectedCount, io.sockets.sockets.size);
+      io.emit(wsEvents.socketDisconnect, io.sockets.sockets.size);
 
       console.log(
         'SOCKET User disconnected. connected users:',
