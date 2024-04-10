@@ -13,7 +13,8 @@ export enum wsEvents {
   messageSend = 'messageSend',
   disconnect = 'disconnect',
   socketDisconnect = 'socketDisconnect',
-  updateGame = 'updateGame',
+  gameUpdate = 'gameUpdate',
+  gameFlowUpdate = 'gameFlowUpdate',
 }
 
 export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
@@ -31,19 +32,23 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
     activeConnections -= 1;
     const clientId = client.getId();
     const { roomId, userId } = streamsMap.get(clientId);
+    streamsMap.delete(clientId);
 
     console.log(
       `PEER DISCONNECT id: ${clientId}. Total connections: ${activeConnections}`
     );
 
-    io.to(roomId).emit(wsEvents.peerDisconnect, clientId);
+    io.to(roomId).emit(wsEvents.peerDisconnect, {
+      streamId: clientId,
+      streams: [...streamsMap],
+    });
 
     const game = await gamesController.removeUserFromGameWithSocket(
       roomId,
       userId
     );
 
-    io.emit(wsEvents.updateGame, dataNormalize(game));
+    io.emit(wsEvents.gameUpdate, dataNormalize(game));
   });
 
   io.on(wsEvents.connection, async (socket) => {
@@ -59,7 +64,10 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
     socket.on(wsEvents.roomConnection, async ([roomId, userId, streamId]) => {
       socket.join(roomId);
       streamsMap.set(streamId, { roomId, userId });
-      socket.to(roomId).emit(wsEvents.roomConnection, streamId);
+      io.to(roomId).emit(wsEvents.roomConnection, {
+        streamId,
+        streams: [...streamsMap],
+      });
 
       console.log(`User ${userId} joined room ${roomId}`);
     });
@@ -83,6 +91,10 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
       }
 
       io.to(message.to.id).emit(event, data);
+    });
+
+    socket.on(wsEvents.gameFlowUpdate, async (gameFlow) => {
+      socket.to(gameFlow.id).emit(wsEvents.gameFlowUpdate, gameFlow);
     });
 
     socket.on(wsEvents.disconnect, () => {

@@ -7,7 +7,10 @@ router.get('/', gamesController.getGames);
 router.get('/:id', gamesController.getGame);
 router.post('/', gamesController.createGame);
 router.patch('/:id', gamesController.updateGame);
+router.patch('/:id/updateGM', gamesController.updateGame);
+router.patch('/:id/updateFlow', gamesController.updateGame);
 router.patch('/:id/addUser/:userId', gamesController.addUserToGame);
 router.patch('/:id/removeUser/:userId', gamesController.removeUserFromGame);
+router.patch('/:id/addRoles', gamesController.addRolesToGame);
 
 export default router;

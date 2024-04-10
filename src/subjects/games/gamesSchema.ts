@@ -1,4 +1,4 @@
-import { model, Schema, Types } from 'mongoose';
+import { model, Schema } from 'mongoose';
 import { IGame } from './gamesTypes';
 import { DBSubject } from '../DBTypes';
 
@@ -11,19 +11,27 @@ const gamesSchema = new Schema<IGame>({
   password: String,
   isPrivate: Boolean,
   isActive: { type: Boolean, required: true },
-  day: { type: Number, required: true },
   gm: { type: String, required: true },
-  mafia: [Types.ObjectId],
-  citizens: [Types.ObjectId],
-  cherif: Types.ObjectId || null,
-  doctor: Types.ObjectId || null,
-  maniac: Types.ObjectId || null,
-  prostitute: Types.ObjectId || null,
-  killed: [Types.ObjectId],
+  mafia: [String],
+  citizens: [String],
+  cherif: String,
+  doctor: String,
+  maniac: String,
+  prostitute: String,
   startTime: Number || null,
   finishTime: Number || null,
   creatingTime: { type: Number, required: true },
   gameType: { type: String, required: true },
+  gameFlow: {
+    speaker: { type: String, required: true },
+    speakTime: { type: Number, required: true },
+    isStarted: { type: Boolean, required: true },
+    isFinished: { type: Boolean, required: true },
+    isNight: { type: Boolean, required: true },
+    day: { type: Number, required: true },
+    proposed: [String],
+    killed: [String],
+  },
 });
 
 export const Games = model<IGame>(DBSubject.Games, gamesSchema);

@@ -21,10 +21,14 @@ export const getGame = async (id: string) => Games.findById(id);
 export const createGame = async (game: IGame) => Games.create(game);
 
 export const updateGame = async (id: string, game: Partial<IGame>) =>
-  Games.findByIdAndUpdate(id, game, {
-    new: true,
-    overwrite: true,
-  });
+  Games.findOneAndUpdate(
+    { _id: id },
+    { $set: game },
+    {
+      new: true,
+      uesFindAndModify: false,
+    }
+  );
 
 export const addGamePlayers = async (id: string, playerId: string) =>
   Games.findOneAndUpdate(
@@ -38,4 +42,11 @@ export const removeGamePlayers = async (id: string, playerId: string) =>
     { _id: id },
     { $pull: { players: playerId } },
     { new: true }
+  );
+
+export const addGameRoles = async (id: string, roles: Partial<IGame>) =>
+  Games.findOneAndUpdate(
+    { _id: id },
+    { $set: roles },
+    { new: true, uesFindAndModify: false }
   );

@@ -60,7 +60,7 @@ export const createGame = async (
       return res.sendError({ message: 'Game not created', status: 400 });
     }
 
-    res.sendResponse(game).io.emit(wsEvents.updateGame, dataNormalize(game));
+    res.sendResponse(game).io.emit(wsEvents.gameUpdate, dataNormalize(game));
   } catch (error) {
     next(error);
   }
@@ -84,7 +84,7 @@ export const updateGame = async (
       return res.status(404).send(`Game with id: ${id} not found`);
     }
 
-    res.sendResponse(game);
+    res.sendResponse(game).io.emit(wsEvents.gameUpdate, dataNormalize(game));
   } catch (error) {
     next(error);
   }
@@ -112,7 +112,7 @@ export const addUserToGame = async (
       return res.sendError({ message: 'Game not found', status: 404 });
     }
 
-    res.sendResponse(game).io.emit(wsEvents.updateGame, dataNormalize(game));
+    res.sendResponse(game).io.emit(wsEvents.gameUpdate, dataNormalize(game));
   } catch (error) {
     next(error);
   }
@@ -147,7 +147,7 @@ export const removeUserFromGame = async (
     res
       .sendResponse(game)
       .io.to(id)
-      .emit(wsEvents.updateGame, dataNormalize(game));
+      .emit(wsEvents.gameUpdate, dataNormalize(game));
   } catch (error) {
     next(error);
   }
@@ -168,4 +168,34 @@ export const removeUserFromGameWithSocket = async (
   // }
 
   return game;
+};
+
+export const addRolesToGame = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const roles = req.body;
+
+  if (!roles) {
+    return res.sendError({ message: 'No roles provided', status: 400 });
+  }
+
+  const { id } = req.params;
+
+  if (!idFormatValidation(id)) {
+    return res.sendError({ message: 'Invalid Game ID format', status: 400 });
+  }
+
+  try {
+    const game = await gamesService.addGameRoles(id, roles);
+
+    if (!game) {
+      return res.sendError({ message: 'Game not found', status: 404 });
+    }
+
+    res.sendResponse(game).io.emit(wsEvents.gameUpdate, dataNormalize(game));
+  } catch (error) {
+    next(error);
+  }
 };
