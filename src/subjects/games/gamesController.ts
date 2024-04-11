@@ -199,3 +199,27 @@ export const addRolesToGame = async (
     next(error);
   }
 };
+
+export const restartGame = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const { id } = req.params;
+
+  if (!idFormatValidation(id)) {
+    return res.sendError({ message: 'Invalid Game ID format', status: 400 });
+  }
+
+  try {
+    const game = await gamesService.restartGame(id);
+
+    if (!game) {
+      return res.sendError({ message: 'Game not found', status: 404 });
+    }
+
+    res.sendResponse(game).io.emit(wsEvents.gameUpdate, dataNormalize(game));
+  } catch (error) {
+    next(error);
+  }
+};

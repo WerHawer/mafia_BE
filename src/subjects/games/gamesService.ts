@@ -11,6 +11,31 @@ import { IGame } from './gamesTypes';
 //   populate: gamePopulateOption,
 // };
 
+const initialGameFlow = {
+  speaker: '',
+  speakTime: 60,
+  isStarted: false,
+  isFinished: false,
+  isNight: false,
+  day: 0,
+  proposed: [],
+  killed: [],
+};
+
+const initialGame = {
+  isActive: true,
+  mafia: [],
+  citizens: [],
+  cherif: '',
+  doctor: '',
+  maniac: '',
+  prostitute: '',
+  startTime: null,
+  finishTime: null,
+  creatingTime: Date.now(),
+  gameFlow: initialGameFlow,
+};
+
 export const getGames = async () => Games.find({}, undefined, { limit: 100 });
 
 export const getActiveGames = async () =>
@@ -48,5 +73,12 @@ export const addGameRoles = async (id: string, roles: Partial<IGame>) =>
   Games.findOneAndUpdate(
     { _id: id },
     { $set: roles },
+    { new: true, uesFindAndModify: false }
+  );
+
+export const restartGame = async (id: string) =>
+  Games.findOneAndUpdate(
+    { _id: id },
+    { $set: initialGame },
     { new: true, uesFindAndModify: false }
   );
