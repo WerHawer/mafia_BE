@@ -14,7 +14,7 @@ const gamesSchema = new Schema<IGame>({
   gm: { type: String, required: true },
   mafia: [String],
   citizens: [String],
-  cherif: String,
+  sheriff: String,
   doctor: String,
   maniac: String,
   prostitute: String,

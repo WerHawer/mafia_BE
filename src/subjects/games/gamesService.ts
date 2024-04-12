@@ -26,7 +26,7 @@ const initialGame = {
   isActive: true,
   mafia: [],
   citizens: [],
-  cherif: '',
+  sheriff: '',
   doctor: '',
   maniac: '',
   prostitute: '',

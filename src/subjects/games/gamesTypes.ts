@@ -25,7 +25,7 @@ export interface IGame {
   gm: string;
   mafia?: string[];
   citizens?: string[];
-  cherif?: string;
+  sheriff?: string;
   doctor?: string;
   maniac?: string;
   prostitute?: string;
