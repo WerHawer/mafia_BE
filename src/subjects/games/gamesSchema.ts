@@ -23,7 +23,7 @@ const gamesSchema = new Schema<IGame>({
   creatingTime: { type: Number, required: true },
   gameType: { type: String, required: true },
   gameFlow: {
-    speaker: { type: String, required: true },
+    speaker: String,
     speakTime: { type: Number, required: true },
     isStarted: { type: Boolean, required: true },
     isFinished: { type: Boolean, required: true },

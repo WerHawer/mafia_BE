@@ -4,6 +4,12 @@ import * as messagesService from './subjects/messages/messagesService';
 import { dataNormalize } from './helpers/dataNormalize';
 import { messagesPopulate } from './subjects/messages/messagesService';
 import { PeerServerEvents } from 'peer';
+import { socketEventsGameFlow } from './socketFlows/socketEventsGameFlow';
+
+export enum OffParams {
+  Other = 'other',
+  Self = 'self',
+}
 
 export enum wsEvents {
   connection = 'connection',
@@ -14,12 +20,30 @@ export enum wsEvents {
   disconnect = 'disconnect',
   socketDisconnect = 'socketDisconnect',
   gameUpdate = 'gameUpdate',
-  gameFlowUpdate = 'gameFlowUpdate',
+  userAudioStatus = 'userAudioStatus',
+  userVideoStatus = 'userVideoStatus',
+  userStreamStatus = 'userStreamStatus',
+  startNight = 'startNight',
+  startDay = 'startDay',
+  updateSpeaker = 'updateSpeaker',
+  wakeUp = 'wakeUp',
 }
 
 export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
   let activeConnections = 0;
-  const streamsMap = new Map<string, Record<'roomId' | 'userId', string>>();
+  const streamsMap = new Map<
+    string,
+    {
+      roomId: string;
+      useTo?: string[];
+      user: {
+        id: string;
+        audio: boolean;
+        video: boolean;
+        offParams?: OffParams;
+      };
+    }
+  >();
 
   peerServer.on(wsEvents.connection, (client) => {
     activeConnections += 1;
@@ -31,7 +55,10 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
   peerServer.on(wsEvents.disconnect, async (client) => {
     activeConnections -= 1;
     const clientId = client.getId();
-    const { roomId, userId } = streamsMap.get(clientId);
+    const {
+      roomId,
+      user: { id: userId },
+    } = streamsMap.get(clientId);
     streamsMap.delete(clientId);
 
     console.log(
@@ -63,7 +90,14 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
 
     socket.on(wsEvents.roomConnection, async ([roomId, userId, streamId]) => {
       socket.join(roomId);
-      streamsMap.set(streamId, { roomId, userId });
+      streamsMap.set(streamId, {
+        roomId,
+        user: {
+          id: userId,
+          audio: true,
+          video: true,
+        },
+      });
       io.to(roomId).emit(wsEvents.roomConnection, {
         streamId,
         streams: [...streamsMap],
@@ -93,10 +127,6 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
       io.to(message.to.id).emit(event, data);
     });
 
-    socket.on(wsEvents.gameFlowUpdate, async (gameFlow) => {
-      socket.to(gameFlow.id).emit(wsEvents.gameFlowUpdate, gameFlow);
-    });
-
     socket.on(wsEvents.disconnect, () => {
       io.emit(wsEvents.socketDisconnect, io.sockets.sockets.size);
 
@@ -105,5 +135,7 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
         io.sockets.sockets.size
       );
     });
+
+    socketEventsGameFlow({ io, socket, streamsMap });
   });
 };
