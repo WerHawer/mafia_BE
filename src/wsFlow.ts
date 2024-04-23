@@ -55,10 +55,7 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
   peerServer.on(wsEvents.disconnect, async (client) => {
     activeConnections -= 1;
     const clientId = client.getId();
-    const {
-      roomId,
-      user: { id: userId },
-    } = streamsMap.get(clientId);
+    const { roomId, user } = streamsMap.get(clientId) || {};
     streamsMap.delete(clientId);
 
     console.log(
@@ -72,7 +69,7 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
 
     const game = await gamesController.removeUserFromGameWithSocket(
       roomId,
-      userId
+      user?.id ?? ''
     );
 
     io.emit(wsEvents.gameUpdate, dataNormalize(game));

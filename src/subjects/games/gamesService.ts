@@ -19,6 +19,7 @@ const initialGameFlow = {
   isNight: false,
   day: 0,
   proposed: [],
+  voted: {},
   killed: [],
 };
 

@@ -31,6 +31,7 @@ const gamesSchema = new Schema<IGame>({
     isVoteTime: { type: Boolean, required: true },
     day: { type: Number, required: true },
     proposed: [String],
+    voted: { type: Object, required: true },
     killed: [String],
   },
 });
