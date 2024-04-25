@@ -3,6 +3,7 @@ import { NextFunction, Response, Request } from 'express';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
 import { wsEvents } from '../../wsFlow';
 import { dataNormalize } from '../../helpers/dataNormalize';
+import { IGame } from './gamesTypes';
 
 export const getGames = async (
   req: Request,
@@ -84,7 +85,15 @@ export const updateGame = async (
       return res.status(404).send(`Game with id: ${id} not found`);
     }
 
-    res.sendResponse(game).io.emit(wsEvents.gameUpdate, dataNormalize(game));
+    const normalizedGame = dataNormalize<IGame>(game);
+
+    if (!normalizedGame.gameFlow.voted) {
+      normalizedGame.gameFlow.voted = {};
+    }
+
+    res
+      .sendResponse(normalizedGame)
+      .io.emit(wsEvents.gameUpdate, normalizedGame);
   } catch (error) {
     next(error);
   }

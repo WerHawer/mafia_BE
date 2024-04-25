@@ -14,9 +14,12 @@ import { IGame } from './gamesTypes';
 const initialGameFlow = {
   speaker: '',
   speakTime: 60,
+  votesTime: 15,
   isStarted: false,
   isFinished: false,
   isNight: false,
+  isVote: false,
+  isExtraSpeech: false,
   day: 0,
   proposed: [],
   voted: {},

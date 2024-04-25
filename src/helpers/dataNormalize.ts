@@ -3,12 +3,15 @@ import { dataToRegularObj } from './dataToRegularObj';
 
 const keysToDelete = ['password', '__v'];
 
-type DataWithId = { id?: string; [key: string]: any };
 type Data = Document | Record<string, any>;
+type DataWithId = { id?: string } & Data;
 
-export const dataNormalize = (
-  data: Data | Data[]
-): DataWithId | DataWithId[] => {
+export const dataNormalize = <
+  T extends Data | Data[] = Data,
+  R extends DataWithId = T,
+>(
+  data: T
+): R => {
   const objectData = dataToRegularObj(data);
 
   const normalize = (data: any): any => {
