@@ -18,6 +18,8 @@ export interface IGameFlow {
   day: number;
   proposed: string[];
   voted: Record<string, string[]>;
+  wakeUp: string[] | string;
+  shoot: string[];
   killed: string[];
 }
 

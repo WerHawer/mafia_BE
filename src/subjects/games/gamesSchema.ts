@@ -33,8 +33,10 @@ const gamesSchema = new Schema<IGame>({
     isReVote: { type: Boolean, required: true },
     isExtraSpeech: { type: Boolean, required: true },
     day: { type: Number, required: true },
-    proposed: [String],
     voted: { type: Object, required: true },
+    proposed: [String],
+    shoot: [String],
+    wakeUp: [String] || String,
     killed: [String],
   },
 });
