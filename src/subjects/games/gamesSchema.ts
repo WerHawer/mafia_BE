@@ -35,9 +35,12 @@ const gamesSchema = new Schema<IGame>({
     day: { type: Number, required: true },
     voted: { type: Object, required: true },
     proposed: [String],
-    shoot: [String],
+    shoot: [[String, String]],
     wakeUp: [String] || String,
     killed: [String],
+    sheriffCheck: String,
+    doctorSave: String,
+    donCheck: String,
   },
 });
 

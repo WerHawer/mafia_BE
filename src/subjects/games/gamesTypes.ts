@@ -19,8 +19,11 @@ export interface IGameFlow {
   proposed: string[];
   voted: Record<string, string[]>;
   wakeUp: string[] | string;
-  shoot: string[];
+  shoot: [string, string][];
   killed: string[];
+  sheriffCheck?: string;
+  doctorSave?: string;
+  donCheck?: string;
 }
 
 export interface IGame {

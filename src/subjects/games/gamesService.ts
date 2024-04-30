@@ -19,11 +19,14 @@ const initialGameFlow = {
   isFinished: false,
   isNight: false,
   isVote: false,
+  isReVote: false,
   isExtraSpeech: false,
   day: 0,
   proposed: [],
   voted: {},
   killed: [],
+  shoot: [],
+  wakeUp: [],
 };
 
 const initialGame = {
