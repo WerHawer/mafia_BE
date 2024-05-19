@@ -1,9 +1,9 @@
 import { Types } from 'mongoose';
 
 export interface IUser {
-  email: string;
-  name: string;
-  nikName?: string;
+  email?: string;
+  name?: string;
+  nickName?: string;
   friendList: [];
   isOnline: true;
   avatar?: IUserAvatar[] | Types.ObjectId[];
@@ -12,9 +12,7 @@ export interface IUser {
 }
 
 export interface IUserCreate {
-  email: string;
-  name: string;
-  nikName?: string;
+  nickName: string;
   password: string;
 }
 

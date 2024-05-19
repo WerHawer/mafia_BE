@@ -6,5 +6,5 @@ const secret = getSecret();
 
 export const createToken = (payload: {
   id: Types.ObjectId;
-  name: string;
+  nickName: string;
 }): string => jwt.sign(payload, secret, { expiresIn: '1d' });

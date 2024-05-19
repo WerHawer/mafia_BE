@@ -1,10 +1,9 @@
 import * as userService from './usersService';
-import { NextFunction, Response, Request } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
 import { createNewUserObj } from '../../helpers/createNewUser';
 import { deleteFileFromAWS, uploadFileToAWS } from '../../awsSdk';
 import { Populate } from '../DBTypes';
-import { dataNormalize } from '../../helpers/dataNormalize';
 import { IUserAvatar } from './usersTypes';
 import { createToken } from '../../helpers/createToken';
 import { comparePassword } from '../../helpers/comparePassword';
@@ -55,31 +54,31 @@ export const createUser = async (
   next: NextFunction
 ) => {
   const newUser = createNewUserObj(req.body);
-  const { email } = newUser;
+  const { nickName } = newUser;
 
-  if (!email) {
+  if (!nickName) {
     return res.sendError({
-      message: 'Email is required',
+      message: 'nickName is required',
       status: 400,
-      field: 'email',
+      field: 'nickName',
     });
   }
 
-  const userByEmail = await userService.getUserByEmail(email);
+  const userByNickName = await userService.getUserByNikName(nickName);
 
-  if (userByEmail) {
+  if (userByNickName) {
     return res.sendError({
-      message: 'User with this email already exists',
+      message: 'User with this nickName already exists',
       status: 400,
-      field: 'email',
+      field: 'nickName',
     });
   }
 
   try {
     const user = await userService.createUser(newUser);
-    const { id, name } = user;
+    const { id, nickName } = user;
 
-    const token = createToken({ id, name });
+    const token = createToken({ id, nickName });
 
     res.sendResponse({ user, token }, 201);
   } catch (error) {
@@ -88,14 +87,14 @@ export const createUser = async (
 };
 
 export const loginUser = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  const user = await userService.getUserByEmail(email);
+  const { login, password } = req.body;
+  const user = await userService.getUserByNikName(login);
 
   if (!user) {
     return res.sendError({
-      message: 'User with this email does not exist',
+      message: 'User with this login does not exist',
       status: 400,
-      field: 'email',
+      field: 'login',
     });
   }
 
@@ -109,8 +108,8 @@ export const loginUser = async (req: Request, res: Response) => {
     });
   }
 
-  const { id, name } = user;
-  const token = createToken({ id, name });
+  const { id, nickName } = user;
+  const token = createToken({ id, nickName });
 
   res.sendResponse({ user, token });
 };

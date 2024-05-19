@@ -50,7 +50,7 @@ app.use(responseWithIo(io));
 
 app.use('/peerjs', peerServer);
 app.use('/login', loginRouter);
-app.use('/registration', registrationRouter);
+app.use('/signUp', registrationRouter);
 
 app.use(auth);
 app.get('/auth', (req, res) => {
