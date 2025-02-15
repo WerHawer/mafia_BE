@@ -1,7 +1,6 @@
 import { Avatars, Users } from './usersSchema';
 import { IUser } from './usersTypes';
 import { Populate } from '../DBTypes';
-import { Types } from 'mongoose';
 
 const usersOptions = {
   populate: Populate.Avatar,
@@ -14,6 +13,9 @@ export const getUserById = async (id: string) =>
   Users.findById(id, undefined, usersOptions);
 
 export const getUserByNickName = async (nickName: string) =>
+  Users.findOne({ nickName }, undefined, usersOptions);
+
+export const getUserByNikName = async (nickName: string) =>
   Users.findOne({ nickName }, undefined, usersOptions);
 
 export const createUser = async (user: IUser) => Users.create(user);

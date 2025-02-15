@@ -1,10 +1,9 @@
 import * as userService from './usersService';
-import { NextFunction, Response, Request } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
 import { createNewUserObj } from '../../helpers/createNewUser';
 import { deleteFileFromAWS, uploadFileToAWS } from '../../awsSdk';
 import { Populate } from '../DBTypes';
-import { dataNormalize } from '../../helpers/dataNormalize';
 import { IUserAvatar } from './usersTypes';
 import { createToken } from '../../helpers/createToken';
 import { comparePassword } from '../../helpers/comparePassword';
@@ -77,9 +76,9 @@ export const createUser = async (
 
   try {
     const user = await userService.createUser(newUser);
-    const { id, name } = user;
+    const { id, nickName } = user;
 
-    const token = createToken({ id, name });
+    const token = createToken({ id, nickName });
 
     res.sendResponse({ user, token }, 201);
   } catch (error) {
@@ -109,8 +108,8 @@ export const loginUser = async (req: Request, res: Response) => {
     });
   }
 
-  const { id, name } = user;
-  const token = createToken({ id, name });
+  const { id, nickName } = user;
+  const token = createToken({ id, nickName });
 
   res.sendResponse({ user, token });
 };
