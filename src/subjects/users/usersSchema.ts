@@ -9,9 +9,7 @@ const avatarSchema = new Schema<IUserAvatar>({
 export const Avatars = model(DBSubject.Avatars, avatarSchema);
 
 const usersSchema = new Schema<IUser>({
-  email: { type: String },
-  name: String,
-  nickName: {
+  nikName: {
     type: String,
     unique: true,
     required: [true, 'Name is required'],

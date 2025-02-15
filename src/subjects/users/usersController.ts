@@ -54,9 +54,9 @@ export const createUser = async (
   next: NextFunction
 ) => {
   const newUser = createNewUserObj(req.body);
-  const { login } = newUser;
+  const { nikName } = newUser;
 
-  if (!login) {
+  if (!nikName) {
     return res.sendError({
       message: 'Login is required',
       status: 400,
@@ -64,7 +64,7 @@ export const createUser = async (
     });
   }
 
-  const userByLogin = await userService.getUserByNickName(login);
+  const userByLogin = await userService.getUserByNickName(nikName);
 
   if (userByLogin) {
     return res.sendError({
@@ -76,9 +76,9 @@ export const createUser = async (
 
   try {
     const user = await userService.createUser(newUser);
-    const { id, nickName } = user;
+    const { id, nikName } = user;
 
-    const token = createToken({ id, nickName });
+    const token = createToken({ id, nikName });
 
     res.sendResponse({ user, token }, 201);
   } catch (error) {
@@ -108,8 +108,8 @@ export const loginUser = async (req: Request, res: Response) => {
     });
   }
 
-  const { id, nickName } = user;
-  const token = createToken({ id, nickName });
+  const { id, nikName } = user;
+  const token = createToken({ id, nikName });
 
   res.sendResponse({ user, token });
 };

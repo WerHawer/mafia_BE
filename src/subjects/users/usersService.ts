@@ -12,11 +12,11 @@ export const getUsers = async () =>
 export const getUserById = async (id: string) =>
   Users.findById(id, undefined, usersOptions);
 
-export const getUserByNickName = async (nickName: string) =>
-  Users.findOne({ nickName }, undefined, usersOptions);
+export const getUserByNickName = async (nikName: string) =>
+  Users.findOne({ nikName }, undefined, usersOptions);
 
-export const getUserByNikName = async (nickName: string) =>
-  Users.findOne({ nickName }, undefined, usersOptions);
+export const getUserByNikName = async (nikName: string) =>
+  Users.findOne({ nikName }, undefined, usersOptions);
 
 export const createUser = async (user: IUser) => Users.create(user);
 

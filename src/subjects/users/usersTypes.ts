@@ -1,9 +1,7 @@
 import { Types } from 'mongoose';
 
 export interface IUser {
-  login: string;
-  name: string;
-  nikName?: string;
+  nikName: string;
   friendList: [];
   isOnline: true;
   avatar?: IUserAvatar[] | Types.ObjectId[];
