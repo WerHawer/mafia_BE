@@ -13,8 +13,8 @@ export const getUsers = async () =>
 export const getUserById = async (id: string) =>
   Users.findById(id, undefined, usersOptions);
 
-export const getUserByEmail = async (email: string) =>
-  Users.findOne({ email }, undefined, usersOptions);
+export const getUserByNickName = async (nickName: string) =>
+  Users.findOne({ nickName }, undefined, usersOptions);
 
 export const createUser = async (user: IUser) => Users.create(user);
 

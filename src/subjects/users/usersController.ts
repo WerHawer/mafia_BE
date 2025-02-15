@@ -55,23 +55,23 @@ export const createUser = async (
   next: NextFunction
 ) => {
   const newUser = createNewUserObj(req.body);
-  const { email } = newUser;
+  const { login } = newUser;
 
-  if (!email) {
+  if (!login) {
     return res.sendError({
-      message: 'Email is required',
+      message: 'Login is required',
       status: 400,
-      field: 'email',
+      field: 'login',
     });
   }
 
-  const userByEmail = await userService.getUserByEmail(email);
+  const userByLogin = await userService.getUserByNickName(login);
 
-  if (userByEmail) {
+  if (userByLogin) {
     return res.sendError({
-      message: 'User with this email already exists',
+      message: 'User with this login already exists',
       status: 400,
-      field: 'email',
+      field: 'login',
     });
   }
 
@@ -88,14 +88,14 @@ export const createUser = async (
 };
 
 export const loginUser = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  const user = await userService.getUserByEmail(email);
+  const { login, password } = req.body;
+  const user = await userService.getUserByNickName(login);
 
   if (!user) {
     return res.sendError({
-      message: 'User with this email does not exist',
+      message: 'User with this login does not exist',
       status: 400,
-      field: 'email',
+      field: 'login',
     });
   }
 

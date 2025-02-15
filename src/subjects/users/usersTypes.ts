@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 
 export interface IUser {
-  email: string;
+  login: string;
   name: string;
   nikName?: string;
   friendList: [];
@@ -12,7 +12,7 @@ export interface IUser {
 }
 
 export interface IUserCreate {
-  email: string;
+  login: string;
   name: string;
   nikName?: string;
   password: string;
