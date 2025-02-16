@@ -48,6 +48,36 @@ export const getUserById = async (
   }
 };
 
+export const getUsersByIds = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const ids = req.query.ids as string;
+
+  if (!ids) {
+    return res.sendError({ message: 'No ids provided', status: 400 });
+  }
+
+  try {
+    const idsArr = ids.split(',');
+    const users = await userService.getUsersByIds(idsArr);
+
+    if (!users) {
+      return res.sendError({
+        message: `Users with ids: ${ids} not found`,
+        status: 404,
+      });
+    }
+
+    res.sendResponse(users);
+  } catch (error) {
+    next(error);
+  }
+
+  return;
+};
+
 export const createUser = async (
   req: Request,
   res: Response,
@@ -64,7 +94,7 @@ export const createUser = async (
     });
   }
 
-  const userByLogin = await userService.getUserByNickName(nikName);
+  const userByLogin = await userService.getUserByNikName(nikName);
 
   if (userByLogin) {
     return res.sendError({
@@ -88,7 +118,7 @@ export const createUser = async (
 
 export const loginUser = async (req: Request, res: Response) => {
   const { login, password } = req.body;
-  const user = await userService.getUserByNickName(login);
+  const user = await userService.getUserByNikName(login);
 
   if (!user) {
     return res.sendError({

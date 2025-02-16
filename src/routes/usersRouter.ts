@@ -5,9 +5,13 @@ import { upload } from '../storage';
 const router = express.Router();
 
 router.route('/').get(userController.getAllUsers);
+
+router.route('/ids').get(userController.getUsersByIds);
+
 router.route('/:id').get(userController.getUserById);
 router.route('/:id').patch(userController.updateUser);
 router.route('/:id').delete(userController.deleteUser);
+
 router
   .route('/:id/avatar')
   .patch(upload.single('avatar'), userController.updateUserAvatar);

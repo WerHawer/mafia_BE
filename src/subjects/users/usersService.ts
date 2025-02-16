@@ -12,9 +12,6 @@ export const getUsers = async () =>
 export const getUserById = async (id: string) =>
   Users.findById(id, undefined, usersOptions);
 
-export const getUserByNickName = async (nikName: string) =>
-  Users.findOne({ nikName }, undefined, usersOptions);
-
 export const getUserByNikName = async (nikName: string) =>
   Users.findOne({ nikName }, undefined, usersOptions);
 
@@ -30,3 +27,6 @@ export const deleteUser = async (id: string) => Users.findByIdAndDelete(id);
 
 export const deleteUserAvatar = async (id: string) =>
   Avatars.findByIdAndDelete(id);
+
+export const getUsersByIds = async (ids: string[]) =>
+  Users.find({ _id: { $in: ids } }, undefined, usersOptions);
