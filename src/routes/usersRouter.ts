@@ -14,7 +14,7 @@ router.route('/:id').delete(userController.deleteUser);
 
 router
   .route('/:id/avatar')
-  .patch(upload.single('avatar'), userController.updateUserAvatar);
+  .patch(upload.single('avatar') as any, userController.updateUserAvatar);
 router.route('/:id/avatar/:avatarId').delete(userController.deleteUserAvatar);
 
 export default router;
