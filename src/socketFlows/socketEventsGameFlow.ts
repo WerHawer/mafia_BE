@@ -1,92 +1,107 @@
 import { OffParams, wsEvents } from '../wsFlow';
 
-export const socketEventsGameFlow = ({ io, socket, streamsMap }) => {
+export const socketEventsGameFlow = ({ io, socket, participantsMap }) => {
   socket.on(
     wsEvents.userVideoStatus,
-    ({ streamId, roomId, video, offParams }) => {
-      streamsMap.get(streamId).user.video = video;
-      streamsMap.get(streamId).user.offParams = offParams;
+    ({ participantIdentity, roomId, video, offParams }) => {
+      const participant = participantsMap.get(participantIdentity);
+      if (participant) {
+        participant.user.video = video;
+        participant.user.offParams = offParams;
 
-      io.to(roomId).emit(wsEvents.userStreamStatus, [...streamsMap]);
+        io.to(roomId).emit(wsEvents.userStreamStatus, [...participantsMap]);
+      }
     }
   );
 
   socket.on(
     wsEvents.userAudioStatus,
-    ({ streamId, roomId, audio, offParams }) => {
-      streamsMap.get(streamId).user.audio = audio;
-      streamsMap.get(streamId).user.offParams = offParams;
+    ({ participantIdentity, roomId, audio, offParams }) => {
+      const participant = participantsMap.get(participantIdentity);
+      if (participant) {
+        participant.user.audio = audio;
+        participant.user.offParams = offParams;
 
-      io.to(roomId).emit(wsEvents.userStreamStatus, [...streamsMap]);
+        io.to(roomId).emit(wsEvents.userStreamStatus, [...participantsMap]);
+      }
     }
   );
 
   socket.on(wsEvents.startNight, ({ gameId }) => {
-    const streamsArr = [...streamsMap];
-    streamsArr
+    const participantsArr = [...participantsMap];
+    participantsArr
       .filter(([, { roomId }]) => roomId === gameId)
-      .forEach((stream) => {
-        const [streamId, { user, roomId }] = stream;
+      .forEach((participant) => {
+        const [participantIdentity, { user, roomId }] = participant;
         const userWithOffVideo = {
           ...user,
           video: false,
           audio: true,
           offParams: OffParams.Other,
         };
-        streamsMap.set(streamId, { user: userWithOffVideo, roomId });
+        participantsMap.set(participantIdentity, {
+          user: userWithOffVideo,
+          roomId,
+        });
       });
 
-    io.to(gameId).emit(wsEvents.userStreamStatus, [...streamsMap]);
+    io.to(gameId).emit(wsEvents.userStreamStatus, [...participantsMap]);
   });
 
   socket.on(wsEvents.startDay, ({ gameId }) => {
-    const streamsArr = [...streamsMap];
-    streamsArr
+    const participantsArr = [...participantsMap];
+    participantsArr
       .filter(([, { roomId }]) => roomId === gameId)
-      .forEach((stream) => {
-        const [streamId, { user, roomId }] = stream;
+      .forEach((participant) => {
+        const [participantIdentity, { user, roomId }] = participant;
         const userWithOnVideo = { ...user, video: true, audio: true };
-        streamsMap.set(streamId, { user: userWithOnVideo, roomId });
+        participantsMap.set(participantIdentity, {
+          user: userWithOnVideo,
+          roomId,
+        });
       });
 
-    io.to(gameId).emit(wsEvents.userStreamStatus, [...streamsMap]);
+    io.to(gameId).emit(wsEvents.userStreamStatus, [...participantsMap]);
   });
 
   socket.on(wsEvents.updateSpeaker, ({ userId, gameId }) => {
-    const streamsArr = [...streamsMap];
-    streamsArr
+    const participantsArr = [...participantsMap];
+    participantsArr
       .filter(([, { roomId }]) => roomId === gameId)
-      .forEach((stream) => {
-        const [streamId, { user, roomId }] = stream;
+      .forEach((participant) => {
+        const [participantIdentity, { user, roomId }] = participant;
         const userWithOnVideo =
           user.id === userId
             ? { ...user, video: true, audio: true }
             : { ...user, audio: false };
 
-        streamsMap.set(streamId, { user: userWithOnVideo, roomId });
+        participantsMap.set(participantIdentity, {
+          user: userWithOnVideo,
+          roomId,
+        });
       });
 
-    io.to(gameId).emit(wsEvents.userStreamStatus, [...streamsMap]);
+    io.to(gameId).emit(wsEvents.userStreamStatus, [...participantsMap]);
   });
 
   socket.on(wsEvents.wakeUp, ({ gameId, users, gm }) => {
-    const streamsArr = [...streamsMap];
+    const participantsArr = [...participantsMap];
 
     const usersToWakeUp = Array.isArray(users) ? users : [users];
 
-    streamsArr
+    participantsArr
       .filter(([, { roomId }]) => roomId === gameId)
-      .forEach((stream) => {
-        const [streamId, { user, roomId }] = stream;
+      .forEach((participant) => {
+        const [participantIdentity, { user, roomId }] = participant;
         const userWithOnVideo = { ...user, video: true, audio: true };
 
-        streamsMap.set(streamId, {
+        participantsMap.set(participantIdentity, {
           user: userWithOnVideo,
           useTo: [...usersToWakeUp, gm],
           roomId,
         });
       });
 
-    io.to(gameId).emit(wsEvents.userStreamStatus, [...streamsMap]);
+    io.to(gameId).emit(wsEvents.userStreamStatus, [...participantsMap]);
   });
 };

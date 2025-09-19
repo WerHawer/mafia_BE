@@ -7,13 +7,13 @@ import * as mongoose from 'mongoose';
 import gamesRouter from './routes/gamesRouter';
 import usersRouter from './routes/usersRouter';
 import messagesRouter from './routes/messagesRouter';
+import livekitRouter from './routes/livekitRouter';
 import { errorLogger } from './middlewares/errorLogger';
 import { errorHandler } from './middlewares/errorHandler';
 import { createServer } from 'http';
 import { uploadDir } from './storage';
 import { createFolderIsNotExist } from './helpers/createFolderIsNotExist';
 import { wsFlow } from './wsFlow';
-import { ExpressPeerServer } from 'peer';
 import { Server } from 'socket.io';
 import { responseNormalizeMiddleware } from './middlewares/responseNormalizeMiddleware';
 import { responseWithIo } from './middlewares/responseWithIo';
@@ -32,9 +32,8 @@ const io = new Server(httpServer, {
     origin: '*',
   },
 });
-const peerServer = ExpressPeerServer(httpServer, { path: '/mafia' });
 
-wsFlow(io, peerServer);
+wsFlow(io);
 
 const port = process.env.PORT || 5051;
 const mongoURI = process.env.DB_HOST;
@@ -48,7 +47,7 @@ app.use(responseNormalizeMiddleware);
 app.use(responseErrorMiddleware);
 app.use(responseWithIo(io));
 
-app.use('/peerjs', peerServer);
+app.use('/livekit', livekitRouter);
 app.use('/login', loginRouter);
 app.use('/signUp', registrationRouter);
 

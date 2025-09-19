@@ -3,7 +3,7 @@ import * as gamesController from './subjects/games/gamesController';
 import * as messagesService from './subjects/messages/messagesService';
 import { dataNormalize } from './helpers/dataNormalize';
 import { messagesPopulate } from './subjects/messages/messagesService';
-import { PeerServerEvents } from 'peer';
+import { livekitService } from './services/livekitService';
 import { socketEventsGameFlow } from './socketFlows/socketEventsGameFlow';
 
 export enum OffParams {
@@ -13,7 +13,7 @@ export enum OffParams {
 
 export enum wsEvents {
   connection = 'connection',
-  peerDisconnect = 'peerDisconnect',
+  participantDisconnect = 'participantDisconnect',
   roomConnection = 'roomConnection',
   roomLeave = 'roomLeave',
   messageSend = 'messageSend',
@@ -27,53 +27,24 @@ export enum wsEvents {
   startDay = 'startDay',
   updateSpeaker = 'updateSpeaker',
   wakeUp = 'wakeUp',
+  livekitToken = 'livekitToken',
 }
 
-export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
-  let activeConnections = 0;
-  const streamsMap = new Map<
+export const wsFlow = (io: Server) => {
+  const participantsMap = new Map<
     string,
     {
       roomId: string;
       useTo?: string[];
       user: {
         id: string;
+        identity: string;
         audio: boolean;
         video: boolean;
         offParams?: OffParams;
       };
     }
   >();
-
-  peerServer.on(wsEvents.connection, (client) => {
-    activeConnections += 1;
-    console.log(
-      `PEER CONNECT id: ${client.getId()}. Total connections: ${activeConnections}`
-    );
-  });
-
-  peerServer.on(wsEvents.disconnect, async (client) => {
-    activeConnections -= 1;
-    const clientId = client.getId();
-    const { roomId, user } = streamsMap.get(clientId) || {};
-    streamsMap.delete(clientId);
-
-    console.log(
-      `PEER DISCONNECT id: ${clientId}. Total connections: ${activeConnections}`
-    );
-
-    io.to(roomId).emit(wsEvents.peerDisconnect, {
-      streamId: clientId,
-      streams: [...streamsMap],
-    });
-
-    const game = await gamesController.removeUserFromGameWithSocket(
-      roomId,
-      user?.id ?? ''
-    );
-
-    io.emit(wsEvents.gameUpdate, dataNormalize(game));
-  });
 
   io.on(wsEvents.connection, async (socket) => {
     console.log(
@@ -85,29 +56,81 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
       connectedUsers: io.sockets.sockets.size,
     });
 
-    socket.on(wsEvents.roomConnection, async ([roomId, userId, streamId]) => {
-      socket.join(roomId);
-      streamsMap.set(streamId, {
-        roomId,
-        user: {
-          id: userId,
-          audio: true,
-          video: true,
-        },
-      });
-      io.to(roomId).emit(wsEvents.roomConnection, {
-        streamId,
-        streams: [...streamsMap],
-      });
+    // Handle LiveKit token request
+    socket.on(
+      wsEvents.livekitToken,
+      async ({ roomName, participantName, userId, metadata }) => {
+        try {
+          // Create room if it doesn't exist
+          await livekitService.createRoom(roomName);
 
-      console.log(`User ${userId} joined room ${roomId}`);
-    });
+          // Generate token
+          const token = livekitService.generateAccessToken(
+            roomName,
+            participantName,
+            metadata
+          );
 
-    socket.on(wsEvents.roomLeave, async ([roomId, userId]) => {
-      socket.leave(roomId);
+          socket.emit(wsEvents.livekitToken, {
+            token,
+            wsUrl: process.env.LIVEKIT_WS_URL || 'ws://localhost:7880',
+            success: true,
+          });
+        } catch (error) {
+          socket.emit(wsEvents.livekitToken, {
+            error: error.message,
+            success: false,
+          });
+        }
+      }
+    );
 
-      console.log(`User ${userId} left room ${roomId}`);
-    });
+    socket.on(
+      wsEvents.roomConnection,
+      async ([roomId, userId, participantIdentity]) => {
+        socket.join(roomId);
+        participantsMap.set(participantIdentity, {
+          roomId,
+          user: {
+            id: userId,
+            identity: participantIdentity,
+            audio: true,
+            video: true,
+          },
+        });
+        io.to(roomId).emit(wsEvents.roomConnection, {
+          participantIdentity,
+          participants: [...participantsMap],
+        });
+
+        console.log(
+          `User ${userId} joined room ${roomId} with identity ${participantIdentity}`
+        );
+      }
+    );
+
+    socket.on(
+      wsEvents.roomLeave,
+      async ([roomId, userId, participantIdentity]) => {
+        socket.leave(roomId);
+
+        // Remove participant from LiveKit room
+        try {
+          await livekitService.removeParticipant(roomId, participantIdentity);
+        } catch (error) {
+          console.error('Error removing participant from LiveKit:', error);
+        }
+
+        participantsMap.delete(participantIdentity);
+
+        io.to(roomId).emit(wsEvents.participantDisconnect, {
+          participantIdentity,
+          participants: [...participantsMap],
+        });
+
+        console.log(`User ${userId} left room ${roomId}`);
+      }
+    );
 
     socket.on(wsEvents.messageSend, async (message) => {
       const savedMessage = await messagesService.createMessage(message);
@@ -124,7 +147,27 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
       io.to(message.to.id).emit(event, data);
     });
 
-    socket.on(wsEvents.disconnect, () => {
+    socket.on(wsEvents.disconnect, async () => {
+      // Clean up participant data
+      for (const [participantIdentity, data] of participantsMap.entries()) {
+        if (data.user.id === socket.id) {
+          try {
+            await livekitService.removeParticipant(
+              data.roomId,
+              participantIdentity
+            );
+          } catch (error) {
+            console.error('Error removing participant on disconnect:', error);
+          }
+          participantsMap.delete(participantIdentity);
+
+          io.to(data.roomId).emit(wsEvents.participantDisconnect, {
+            participantIdentity,
+            participants: [...participantsMap],
+          });
+        }
+      }
+
       io.emit(wsEvents.socketDisconnect, io.sockets.sockets.size);
 
       console.log(
@@ -133,6 +176,6 @@ export const wsFlow = (io: Server, peerServer: PeerServerEvents) => {
       );
     });
 
-    socketEventsGameFlow({ io, socket, streamsMap });
+    socketEventsGameFlow({ io, socket, participantsMap });
   });
 };
