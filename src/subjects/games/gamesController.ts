@@ -4,6 +4,7 @@ import { idFormatValidation } from '../../helpers/idFormatValidation';
 import { wsEvents } from '../../wsFlow';
 import { dataNormalize } from '../../helpers/dataNormalize';
 import { IGame } from './gamesTypes';
+import { createGamesShortData } from '../../helpers/createGamesShortData';
 
 export const getGames = async (
   req: Request,
@@ -18,8 +19,9 @@ export const getGames = async (
 
   try {
     const games = await requestHandler();
+    const shortGames = dataNormalize(games.map(createGamesShortData));
 
-    res.sendResponse(games);
+    res.sendResponse(shortGames);
   } catch (error) {
     next(error);
   }
@@ -160,23 +162,6 @@ export const removeUserFromGame = async (
   } catch (error) {
     next(error);
   }
-};
-
-export const removeUserFromGameWithSocket = async (
-  gameId: string,
-  userId: string
-) => {
-  let game = await gamesService.removeGamePlayers(gameId, userId);
-
-  if (userId === game.gm && game.players.length > 0) {
-    game = await gamesService.updateGame(gameId, { gm: game.players[0] });
-  }
-
-  // if (game.players.length === 0) {
-  //   game = await gamesService.updateGame(gameId, { isActive: false });
-  // }
-
-  return game;
 };
 
 export const addRolesToGame = async (

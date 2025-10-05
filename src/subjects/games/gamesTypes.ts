@@ -27,6 +27,7 @@ export interface IGameFlow {
 }
 
 export interface IGame {
+  id?: string;
   owner: string;
   players: string[];
   password?: string;
@@ -44,6 +45,17 @@ export interface IGame {
   creatingTime: number;
   gameType: GameType;
   gameFlow: IGameFlow;
+}
+
+export interface IGameShort {
+  id?: string;
+  owner: string;
+  playersCount: number;
+  isPrivate: boolean;
+  isActive: boolean;
+  gm: string;
+  gameType: GameType;
+  creatingTime: number;
 }
 
 export interface IGameDTO extends Omit<IGame, 'players'> {

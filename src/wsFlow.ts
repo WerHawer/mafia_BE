@@ -5,6 +5,8 @@ import { dataNormalize } from './helpers/dataNormalize';
 import { messagesPopulate } from './subjects/messages/messagesService';
 import { livekitService } from './services/livekitService';
 import { socketEventsGameFlow } from './socketFlows/socketEventsGameFlow';
+import * as gamesService from './subjects/games/gamesService';
+import { createGamesShortData } from './helpers/createGamesShortData';
 
 export enum OffParams {
   Other = 'other',
@@ -85,52 +87,27 @@ export const wsFlow = (io: Server) => {
       }
     );
 
-    socket.on(
-      wsEvents.roomConnection,
-      async ([roomId, userId, participantIdentity]) => {
-        socket.join(roomId);
-        participantsMap.set(participantIdentity, {
-          roomId,
-          user: {
-            id: userId,
-            identity: participantIdentity,
-            audio: true,
-            video: true,
-          },
-        });
-        io.to(roomId).emit(wsEvents.roomConnection, {
-          participantIdentity,
-          participants: [...participantsMap],
-        });
+    socket.on(wsEvents.roomConnection, async ([roomId, userId]) => {
+      socket.join(roomId);
 
-        console.log(
-          `User ${userId} joined room ${roomId} with identity ${participantIdentity}`
-        );
-      }
-    );
+      const game = await gamesService.getGame(roomId);
+      const shortGame = createGamesShortData(game);
 
-    socket.on(
-      wsEvents.roomLeave,
-      async ([roomId, userId, participantIdentity]) => {
-        socket.leave(roomId);
+      io.emit(wsEvents.roomConnection, { userId, roomId, game: shortGame });
 
-        // Remove participant from LiveKit room
-        try {
-          await livekitService.removeParticipant(roomId, participantIdentity);
-        } catch (error) {
-          console.error('Error removing participant from LiveKit:', error);
-        }
+      console.log(`User ${userId} joined room ${roomId}`);
+    });
 
-        participantsMap.delete(participantIdentity);
+    socket.on(wsEvents.roomLeave, async ([roomId, userId]) => {
+      socket.leave(roomId);
 
-        io.to(roomId).emit(wsEvents.participantDisconnect, {
-          participantIdentity,
-          participants: [...participantsMap],
-        });
+      const game = await gamesService.getGame(roomId);
+      const shortGame = createGamesShortData(game);
 
-        console.log(`User ${userId} left room ${roomId}`);
-      }
-    );
+      io.emit(wsEvents.roomLeave, { userId, roomId, game: shortGame });
+
+      console.log(`User ${userId} left room ${roomId}`);
+    });
 
     socket.on(wsEvents.messageSend, async (message) => {
       const savedMessage = await messagesService.createMessage(message);
