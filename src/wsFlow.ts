@@ -22,6 +22,7 @@ export enum wsEvents {
   disconnect = 'disconnect',
   socketDisconnect = 'socketDisconnect',
   gameUpdate = 'gameUpdate',
+  gamesUpdate = 'gamesUpdate',
   userAudioStatus = 'userAudioStatus',
   userVideoStatus = 'userVideoStatus',
   userStreamStatus = 'userStreamStatus',
@@ -30,6 +31,9 @@ export enum wsEvents {
   updateSpeaker = 'updateSpeaker',
   wakeUp = 'wakeUp',
   livekitToken = 'livekitToken',
+  addToProposed = 'addToProposed',
+  vote = 'vote',
+  shoot = 'shoot',
 }
 
 export const wsFlow = (io: Server) => {

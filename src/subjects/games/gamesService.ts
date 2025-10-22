@@ -24,8 +24,8 @@ const initialGameFlow = {
   day: 0,
   proposed: [],
   voted: {},
+  shoot: {},
   killed: [],
-  shoot: [],
   wakeUp: [],
 };
 
@@ -41,6 +41,18 @@ const initialGame = {
   finishTime: null,
   creatingTime: Date.now(),
   gameFlow: initialGameFlow,
+};
+
+const resetDayNightFlow = {
+  'gameFlow.speaker': '',
+  'gameFlow.proposed': [],
+  'gameFlow.shoot': {},
+  'gameFlow.voted': {},
+  'gameFlow.isVote': false,
+  'gameFlow.isExtraSpeech': false,
+  'gameFlow.wakeUp': '',
+  'gameFlow.sheriffCheck': '',
+  'gameFlow.donCheck': '',
 };
 
 export const getGames = async () => Games.find({}, undefined, { limit: 100 });
@@ -89,3 +101,79 @@ export const restartGame = async (id: string) =>
     { $set: initialGame },
     { new: true, uesFindAndModify: false }
   );
+
+export const startGame = async (id: string) => {
+  return Games.findOneAndUpdate(
+    { _id: id },
+    {
+      $set: {
+        isActive: true,
+        startTime: new Date(),
+        'gameFlow.isStarted': true,
+        'gameFlow.day': 1,
+      },
+    },
+    { new: true, uesFindAndModify: false }
+  );
+};
+
+export const startDay = async (id: string) => {
+  return Games.findOneAndUpdate(
+    { _id: id },
+    {
+      $set: {
+        'gameFlow.isNight': false,
+        ...resetDayNightFlow,
+      },
+      $inc: {
+        'gameFlow.day': 1,
+      },
+    },
+    { new: true, uesFindAndModify: false }
+  );
+};
+
+export const startNight = async (id: string) => {
+  return Games.findOneAndUpdate(
+    { _id: id },
+    {
+      $set: {
+        'gameFlow.isNight': true,
+        ...resetDayNightFlow,
+      },
+    },
+    { new: true, uesFindAndModify: false }
+  );
+};
+
+export const addUserToProposed = async (id: string, userId: string) => {
+  return Games.findOneAndUpdate(
+    { _id: id },
+    { $addToSet: { 'gameFlow.proposed': userId } },
+    { new: true }
+  );
+};
+
+export const addVote = async (
+  id: string,
+  targetUserId: string,
+  voterId: string
+) => {
+  return Games.findOneAndUpdate(
+    { _id: id },
+    { $addToSet: { [`gameFlow.voted.${targetUserId}`]: voterId } },
+    { new: true }
+  );
+};
+
+export const addShoot = async (
+  id: string,
+  targetUserId: string,
+  shooterId: string
+) => {
+  return Games.findOneAndUpdate(
+    { _id: id },
+    { $addToSet: { [`gameFlow.shoot.${targetUserId}`]: shooterId } },
+    { new: true }
+  );
+};

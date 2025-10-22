@@ -35,7 +35,7 @@ const gamesSchema = new Schema<IGame>({
     day: { type: Number, required: true },
     voted: { type: Object, required: true },
     proposed: [String],
-    shoot: [[String, String]],
+    shoot: { type: Object, required: true },
     wakeUp: { type: Schema.Types.Mixed, default: '' },
     killed: [String],
     sheriffCheck: String,

@@ -19,7 +19,7 @@ export interface IGameFlow {
   proposed: string[];
   voted: Record<string, string[]>;
   wakeUp: string[] | string;
-  shoot: [string, string][];
+  shoot: Record<string, string[]>;
   killed: string[];
   sheriffCheck?: string;
   doctorSave?: string;
