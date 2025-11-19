@@ -1,4 +1,8 @@
-import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
+import {
+  AccessToken,
+  RoomServiceClient,
+  TrackSource,
+} from 'livekit-server-sdk';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -112,6 +116,105 @@ export class LiveKitService {
       );
     } catch (error) {
       throw new Error(`Failed to mute/unmute participant: ${error}`);
+    }
+  }
+
+  /**
+   * Update participant permissions (camera and microphone)
+   */
+  async updateParticipantPermissions(
+    roomName: string,
+    participantIdentity: string,
+    canPublish: boolean,
+    canPublishData?: boolean
+  ) {
+    try {
+      await this.roomService.updateParticipant(
+        roomName,
+        participantIdentity,
+        undefined,
+        {
+          canPublish,
+          canPublishData: canPublishData ?? true,
+          canSubscribe: true,
+        }
+      );
+    } catch (error) {
+      throw new Error(`Failed to update participant permissions: ${error}`);
+    }
+  }
+
+  /**
+   * Mute participant's published track by source
+   */
+  async muteParticipantTrackBySource(
+    roomName: string,
+    participantIdentity: string,
+    trackSource: 'camera' | 'microphone',
+    muted: boolean
+  ) {
+    try {
+      const participants = await this.listParticipants(roomName);
+      const participant = participants.find(
+        (p) => p.identity === participantIdentity
+      );
+
+      if (!participant) {
+        throw new Error(`Participant ${participantIdentity} not found`);
+      }
+
+      console.log(
+        `[LiveKit] Participant ${participantIdentity} tracks:`,
+        participant.tracks.map((t) => ({
+          sid: t.sid,
+          source: t.source,
+          type: t.type,
+          muted: t.muted,
+        }))
+      );
+
+      const targetSource =
+        trackSource === 'camera' ? TrackSource.CAMERA : TrackSource.MICROPHONE;
+
+      const track = participant.tracks.find((t) => t.source === targetSource);
+
+      if (!track) {
+        console.error(
+          `[LiveKit] ${trackSource} track (source=${targetSource}) not found for participant ${participantIdentity}`
+        );
+        console.error(
+          `[LiveKit] Available tracks:`,
+          participant.tracks.map((t) => `source=${t.source}, type=${t.type}`)
+        );
+        throw new Error(
+          `${trackSource} track not found for participant ${participantIdentity}`
+        );
+      }
+
+      console.log(
+        `[LiveKit] ${muted ? 'Muting' : 'Unmuting'} ${trackSource} track ${track.sid} for participant ${participantIdentity}`
+      );
+
+      await this.roomService.mutePublishedTrack(
+        roomName,
+        participantIdentity,
+        track.sid,
+        muted
+      );
+
+      console.log(
+        `[LiveKit] Successfully ${muted ? 'muted' : 'unmuted'} ${trackSource} for participant ${participantIdentity}`
+      );
+
+      return true;
+    } catch (error) {
+      console.error(
+        `[LiveKit] Error ${muted ? 'muting' : 'unmuting'} ${trackSource}:`,
+        error
+      );
+      throw new Error(
+        `Failed to ${muted ? 'mute' : 'unmute'} ${trackSource}: ${error}`
+      );
     }
   }
 
