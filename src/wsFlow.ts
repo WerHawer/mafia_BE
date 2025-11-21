@@ -38,7 +38,10 @@ export enum wsEvents {
   toggleUserMicrophone = 'toggleUserMicrophone',
   userCameraStatusChanged = 'userCameraStatusChanged',
   userMicrophoneStatusChanged = 'userMicrophoneStatusChanged',
+  batchToggleMicrophones = 'batchToggleMicrophones',
 }
+
+export const userSocketMap = new Map<string, string>();
 
 export const wsFlow = (io: Server) => {
   const participantsMap = new Map<
@@ -60,6 +63,11 @@ export const wsFlow = (io: Server) => {
     console.log(
       `SOCKET User connected! connected users: ${io.sockets.sockets.size}`
     );
+    const userId = socket.handshake.auth.userId;
+
+    if (userId) {
+      userSocketMap.set(userId, socket.id);
+    }
 
     io.emit(wsEvents.connection, {
       message: `connect success. Connected users: ${io.sockets.sockets.size}`,
@@ -69,7 +77,7 @@ export const wsFlow = (io: Server) => {
     // Handle LiveKit token request
     socket.on(
       wsEvents.livekitToken,
-      async ({ roomName, participantName, userId, metadata }) => {
+      async ({ roomName, participantName, metadata }) => {
         try {
           // Create room if it doesn't exist
           await livekitService.createRoom(roomName);
@@ -151,6 +159,10 @@ export const wsFlow = (io: Server) => {
             participants: [...participantsMap],
           });
         }
+      }
+
+      if (userId) {
+        userSocketMap.delete(userId);
       }
 
       io.emit(wsEvents.socketDisconnect, io.sockets.sockets.size);
@@ -307,6 +319,109 @@ export const wsFlow = (io: Server) => {
           console.error('Error toggling microphone:', error);
           socket.emit('error', {
             message: 'Failed to toggle microphone',
+            details: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    );
+
+    socket.on(
+      wsEvents.batchToggleMicrophones,
+      async ({
+        roomId,
+        enabled,
+        targetUserIds,
+        excludedUserIds,
+        requesterId,
+      }: {
+        roomId: string;
+        enabled: boolean;
+        targetUserIds: string[];
+        excludedUserIds: string[];
+        requesterId: string;
+      }) => {
+        try {
+          if (!roomId || !requesterId || !targetUserIds) {
+            socket.emit('error', {
+              message: 'Missing required parameters for batch operation',
+            });
+            return;
+          }
+
+          const game = await gamesService.getGame(roomId);
+
+          if (!game) {
+            socket.emit('error', { message: 'Game not found' });
+            return;
+          }
+
+          const isGM = game.gm === requesterId;
+
+          if (!isGM) {
+            socket.emit('error', {
+              message: 'Access denied: Only GM can use batch controls',
+            });
+            console.log(
+              `Access denied: ${requesterId} tried to use batch microphone control (isGM: ${isGM})`
+            );
+            return;
+          }
+
+          const usersToProcess = targetUserIds.filter(
+            (userId) => !excludedUserIds.includes(userId)
+          );
+
+          console.log(
+            `[Batch] Processing ${usersToProcess.length} users (excluded: ${excludedUserIds.length}) - ${enabled ? 'enabling' : 'disabling'} microphones`
+          );
+
+          const shouldMute = !enabled;
+          const results = await Promise.allSettled(
+            usersToProcess.map(async (userId) => {
+              try {
+                await livekitService.muteParticipantTrackBySource(
+                  roomId,
+                  userId,
+                  'microphone',
+                  shouldMute
+                );
+
+                io.to(roomId).emit(wsEvents.userMicrophoneStatusChanged, {
+                  userId,
+                  enabled,
+                });
+
+                return { userId, success: true };
+              } catch (error) {
+                console.error(
+                  `[Batch] Failed to toggle microphone for user ${userId}:`,
+                  error
+                );
+                return { userId, success: false, error };
+              }
+            })
+          );
+
+          const successful = results.filter(
+            (r) => r.status === 'fulfilled' && r.value.success
+          ).length;
+          const failed = results.length - successful;
+
+          console.log(
+            `[Batch] Microphone ${enabled ? 'enabled' : 'disabled'} for ${successful}/${usersToProcess.length} users by ${requesterId} (failed: ${failed})`
+          );
+
+          if (failed > 0) {
+            socket.emit('warning', {
+              message: `Batch operation completed with ${failed} failures`,
+              successful,
+              failed,
+            });
+          }
+        } catch (error) {
+          console.error('Error in batch microphone toggle:', error);
+          socket.emit('error', {
+            message: 'Failed to perform batch microphone operation',
             details: error instanceof Error ? error.message : String(error),
           });
         }

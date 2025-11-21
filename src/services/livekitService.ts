@@ -163,16 +163,6 @@ export class LiveKitService {
         throw new Error(`Participant ${participantIdentity} not found`);
       }
 
-      console.log(
-        `[LiveKit] Participant ${participantIdentity} tracks:`,
-        participant.tracks.map((t) => ({
-          sid: t.sid,
-          source: t.source,
-          type: t.type,
-          muted: t.muted,
-        }))
-      );
-
       const targetSource =
         trackSource === 'camera' ? TrackSource.CAMERA : TrackSource.MICROPHONE;
 
@@ -216,6 +206,52 @@ export class LiveKitService {
         `Failed to ${muted ? 'mute' : 'unmute'} ${trackSource}: ${error}`
       );
     }
+  }
+
+  /**
+   * Batch mute/unmute microphones for multiple participants
+   */
+  async batchMuteMicrophones(
+    roomName: string,
+    participantIdentities: string[],
+    muted: boolean
+  ): Promise<{ successful: string[]; failed: string[] }> {
+    const results = {
+      successful: [] as string[],
+      failed: [] as string[],
+    };
+
+    console.log(
+      `[LiveKit Batch] ${muted ? 'Muting' : 'Unmuting'} microphones for ${participantIdentities.length} participants`
+    );
+
+    const promises = participantIdentities.map(async (identity) => {
+      try {
+        await this.muteParticipantTrackBySource(
+          roomName,
+          identity,
+          'microphone',
+          muted
+        );
+        results.successful.push(identity);
+        return { identity, success: true };
+      } catch (error) {
+        console.error(
+          `[LiveKit Batch] Failed for participant ${identity}:`,
+          error instanceof Error ? error.message : String(error)
+        );
+        results.failed.push(identity);
+        return { identity, success: false };
+      }
+    });
+
+    await Promise.allSettled(promises);
+
+    console.log(
+      `[LiveKit Batch] Completed: ${results.successful.length} successful, ${results.failed.length} failed`
+    );
+
+    return results;
   }
 
   /**

@@ -74,19 +74,52 @@ export const updateGame = async (id: string, game: Partial<IGame>) =>
     }
   );
 
-export const addGamePlayers = async (id: string, playerId: string) =>
-  Games.findOneAndUpdate(
+export const addGamePlayers = async (id: string, playerId: string) => {
+  const game = await Games.findById(id);
+
+  if (!game) {
+    console.error(`[addGamePlayers] Game with id ${id} not found`);
+    throw new Error(`Game with id ${id} not found`);
+  }
+
+  console.log(
+    `[addGamePlayers] Current players:`,
+    game.players,
+    `(count: ${game.players.length})`
+  );
+
+  if (game.players.includes(playerId)) {
+    return game;
+  }
+
+  return Games.findOneAndUpdate(
     { _id: id },
     { $addToSet: { players: playerId } },
     { new: true }
   );
+};
 
-export const removeGamePlayers = async (id: string, playerId: string) =>
-  Games.findOneAndUpdate(
+export const removeGamePlayers = async (id: string, playerId: string) => {
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $pull: { players: playerId } },
     { new: true }
   );
+
+  if (updatedGame) {
+    console.log(
+      `[removeGamePlayers] Successfully removed player ${playerId}. Remaining players:`,
+      updatedGame.players,
+      `(count: ${updatedGame.players.length})`
+    );
+  } else {
+    console.error(
+      `[removeGamePlayers] Failed to remove player from game ${id}`
+    );
+  }
+
+  return updatedGame;
+};
 
 export const addGameRoles = async (id: string, roles: Partial<IGame>) =>
   Games.findOneAndUpdate(

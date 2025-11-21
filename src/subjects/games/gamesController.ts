@@ -1,10 +1,11 @@
 import * as gamesService from './gamesService';
 import { NextFunction, Response, Request } from 'express';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
-import { wsEvents } from '../../wsFlow';
+import { userSocketMap, wsEvents } from '../../wsFlow';
 import { dataNormalize } from '../../helpers/dataNormalize';
 import { IGame } from './gamesTypes';
 import { createGamesShortData } from '../../helpers/createGamesShortData';
+import usersRouter from '../../routes/usersRouter';
 
 export const getGames = async (
   req: Request,
@@ -112,10 +113,14 @@ export const addUserToGame = async (
   const { id, userId } = req.params;
 
   if (!idFormatValidation(id)) {
+    console.error(`[addUserToGame Controller] Invalid Game ID format: ${id}`);
     return res.sendError({ message: 'Invalid Game ID format', status: 400 });
   }
 
   if (!idFormatValidation(userId)) {
+    console.error(
+      `[addUserToGame Controller] Invalid User ID format: ${userId}`
+    );
     return res.sendError({ message: 'Invalid User ID format', status: 400 });
   }
 
@@ -123,14 +128,20 @@ export const addUserToGame = async (
     const game = await gamesService.addGamePlayers(id, userId);
 
     if (!game) {
+      console.error(`[addUserToGame Controller] Game ${id} not found`);
       return res.sendError({ message: 'Game not found', status: 404 });
     }
+
+    console.log(
+      `[addUserToGame Controller] Successfully added user ${userId} to game ${id}`
+    );
 
     res
       .sendResponse(game)
       .io.to(id)
       .emit(wsEvents.gameUpdate, dataNormalize(game));
   } catch (error) {
+    console.error(`[addUserToGame Controller] Error:`, error);
     next(error);
   }
 };
@@ -161,9 +172,12 @@ export const removeUserFromGame = async (
       game = await gamesService.updateGame(id, { isActive: false });
     }
 
+    const userSocketId = userSocketMap.get(userId);
+
     res
-      .sendResponse(game)
+      .sendResponse(dataNormalize(game))
       .io.to(id)
+      .except(userSocketId)
       .emit(wsEvents.gameUpdate, dataNormalize(game));
   } catch (error) {
     next(error);
