@@ -84,7 +84,6 @@ export const addGamePlayers = async (id: string, playerId: string) => {
 
   console.log(
     `[addGamePlayers] Current players:`,
-    game.players,
     `(count: ${game.players.length})`
   );
 
@@ -108,9 +107,8 @@ export const removeGamePlayers = async (id: string, playerId: string) => {
 
   if (updatedGame) {
     console.log(
-      `[removeGamePlayers] Successfully removed player ${playerId}. Remaining players:`,
-      updatedGame.players,
-      `(count: ${updatedGame.players.length})`
+      `[removeGamePlayers] Successfully removed player ${playerId}`,
+      `(left: ${updatedGame.players.length})`
     );
   } else {
     console.error(
