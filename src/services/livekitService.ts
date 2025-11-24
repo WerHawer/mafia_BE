@@ -45,6 +45,7 @@ export class LiveKitService {
       canPublish: true,
       canSubscribe: true,
       canPublishData: true,
+      canUpdateOwnMetadata: true,
     });
 
     return await token.toJwt();
@@ -146,6 +147,7 @@ export class LiveKitService {
 
   /**
    * Mute participant's published track by source
+   * Note: Server can only MUTE tracks. For UNMUTE, we send a command to the client.
    */
   async muteParticipantTrackBySource(
     roomName: string,
@@ -154,6 +156,13 @@ export class LiveKitService {
     muted: boolean
   ) {
     try {
+      if (!muted) {
+        console.log(
+          `[LiveKit] Unmute request for ${trackSource} - this will be handled by client-side`
+        );
+        return { handledByClient: true };
+      }
+
       const participants = await this.listParticipants(roomName);
       const participant = participants.find(
         (p) => p.identity === participantIdentity
@@ -182,29 +191,24 @@ export class LiveKitService {
       }
 
       console.log(
-        `[LiveKit] ${muted ? 'Muting' : 'Unmuting'} ${trackSource} track ${track.sid} for participant ${participantIdentity}`
+        `[LiveKit] Muting ${trackSource} track ${track.sid} for participant ${participantIdentity}`
       );
 
       await this.roomService.mutePublishedTrack(
         roomName,
         participantIdentity,
         track.sid,
-        muted
+        true
       );
 
       console.log(
-        `[LiveKit] Successfully ${muted ? 'muted' : 'unmuted'} ${trackSource} for participant ${participantIdentity}`
+        `[LiveKit] Successfully muted ${trackSource} for participant ${participantIdentity}`
       );
 
-      return true;
+      return { handledByServer: true };
     } catch (error) {
-      console.error(
-        `[LiveKit] Error ${muted ? 'muting' : 'unmuting'} ${trackSource}:`,
-        error
-      );
-      throw new Error(
-        `Failed to ${muted ? 'mute' : 'unmute'} ${trackSource}: ${error}`
-      );
+      console.error(`[LiveKit] Error muting ${trackSource}:`, error);
+      throw new Error(`Failed to mute ${trackSource}: ${error}`);
     }
   }
 

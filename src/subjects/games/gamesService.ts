@@ -178,11 +178,38 @@ export const startNight = async (id: string) => {
 };
 
 export const addUserToProposed = async (id: string, userId: string) => {
-  return Games.findOneAndUpdate(
+  const game = await Games.findById(id);
+
+  if (!game) {
+    console.error(`[addUserToProposed] Game with id ${id} not found`);
+    throw new Error(`Game with id ${id} not found`);
+  }
+
+  console.log(
+    `[addUserToProposed] Current proposed:`,
+    game.gameFlow.proposed,
+    `(count: ${game.gameFlow.proposed.length})`
+  );
+
+  if (game.gameFlow.proposed.includes(userId)) {
+    console.log(`[addUserToProposed] User ${userId} already in proposed list`);
+    return game;
+  }
+
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $addToSet: { 'gameFlow.proposed': userId } },
     { new: true }
   );
+
+  if (updatedGame) {
+    console.log(
+      `[addUserToProposed] Successfully added user ${userId}`,
+      `(total: ${updatedGame.gameFlow.proposed.length})`
+    );
+  }
+
+  return updatedGame;
 };
 
 export const addVote = async (

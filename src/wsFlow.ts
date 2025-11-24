@@ -229,16 +229,24 @@ export const wsFlow = (io: Server) => {
 
           const shouldMute = !enabled;
 
-          await livekitService.muteParticipantTrackBySource(
-            roomId,
-            participantIdentity,
-            'camera',
-            shouldMute
-          );
+          if (shouldMute) {
+            await livekitService.muteParticipantTrackBySource(
+              roomId,
+              participantIdentity,
+              'camera',
+              true
+            );
+          } else {
+            console.log(
+              `[WS] Unmute request for camera - sending command to client ${participantIdentity}`
+            );
+          }
 
           io.to(roomId).emit(wsEvents.userCameraStatusChanged, {
             userId,
+            participantIdentity,
             enabled,
+            targetIdentity: participantIdentity,
           });
 
           console.log(
@@ -300,16 +308,24 @@ export const wsFlow = (io: Server) => {
 
           const shouldMute = !enabled;
 
-          await livekitService.muteParticipantTrackBySource(
-            roomId,
-            participantIdentity,
-            'microphone',
-            shouldMute
-          );
+          if (shouldMute) {
+            await livekitService.muteParticipantTrackBySource(
+              roomId,
+              participantIdentity,
+              'microphone',
+              true
+            );
+          } else {
+            console.log(
+              `[WS] Unmute request for microphone - sending command to client ${participantIdentity}`
+            );
+          }
 
           io.to(roomId).emit(wsEvents.userMicrophoneStatusChanged, {
             userId,
+            participantIdentity,
             enabled,
+            targetIdentity: participantIdentity,
           });
 
           console.log(
@@ -376,48 +392,66 @@ export const wsFlow = (io: Server) => {
           );
 
           const shouldMute = !enabled;
-          const results = await Promise.allSettled(
-            usersToProcess.map(async (userId) => {
-              try {
-                await livekitService.muteParticipantTrackBySource(
-                  roomId,
-                  userId,
-                  'microphone',
-                  shouldMute
-                );
 
-                io.to(roomId).emit(wsEvents.userMicrophoneStatusChanged, {
-                  userId,
-                  enabled,
-                });
+          if (shouldMute) {
+            const results = await Promise.allSettled(
+              usersToProcess.map(async (userId) => {
+                try {
+                  await livekitService.muteParticipantTrackBySource(
+                    roomId,
+                    userId,
+                    'microphone',
+                    true
+                  );
 
-                return { userId, success: true };
-              } catch (error) {
-                console.error(
-                  `[Batch] Failed to toggle microphone for user ${userId}:`,
-                  error
-                );
-                return { userId, success: false, error };
-              }
-            })
-          );
+                  io.to(roomId).emit(wsEvents.userMicrophoneStatusChanged, {
+                    userId,
+                    participantIdentity: userId,
+                    enabled: false,
+                    targetIdentity: userId,
+                  });
 
-          const successful = results.filter(
-            (r) => r.status === 'fulfilled' && r.value.success
-          ).length;
-          const failed = results.length - successful;
+                  return { userId, success: true };
+                } catch (error) {
+                  console.error(
+                    `[Batch] Failed to mute microphone for user ${userId}:`,
+                    error
+                  );
+                  return { userId, success: false, error };
+                }
+              })
+            );
 
-          console.log(
-            `[Batch] Microphone ${enabled ? 'enabled' : 'disabled'} for ${successful}/${usersToProcess.length} users by ${requesterId} (failed: ${failed})`
-          );
+            const successful = results.filter(
+              (r) => r.status === 'fulfilled' && r.value.success
+            );
+            console.log(
+              `[Batch] Muted ${successful.length}/${usersToProcess.length} microphones`
+            );
+          } else {
+            console.log(
+              `[Batch] Unmute request - sending commands to ${usersToProcess.length} clients`
+            );
 
-          if (failed > 0) {
-            socket.emit('warning', {
-              message: `Batch operation completed with ${failed} failures`,
-              successful,
-              failed,
+            usersToProcess.forEach((userId) => {
+              io.to(roomId).emit(wsEvents.userMicrophoneStatusChanged, {
+                userId,
+                participantIdentity: userId,
+                enabled: true,
+                targetIdentity: userId,
+              });
             });
+
+            console.log(
+              `[Batch] Sent unmute commands to ${usersToProcess.length} users`
+            );
           }
+
+          socket.emit('batchOperationComplete', {
+            operation: 'toggleMicrophones',
+            enabled,
+            processedCount: usersToProcess.length,
+          });
         } catch (error) {
           console.error('Error in batch microphone toggle:', error);
           socket.emit('error', {
