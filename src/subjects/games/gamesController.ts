@@ -1,11 +1,10 @@
-import * as gamesService from './gamesService';
-import { NextFunction, Response, Request } from 'express';
+import { NextFunction, Request, Response } from 'express';
+import { createGamesShortData } from '../../helpers/createGamesShortData';
+import { dataNormalize } from '../../helpers/dataNormalize';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
 import { userSocketMap, wsEvents } from '../../wsFlow';
-import { dataNormalize } from '../../helpers/dataNormalize';
+import * as gamesService from './gamesService';
 import { IGame } from './gamesTypes';
-import { createGamesShortData } from '../../helpers/createGamesShortData';
-import usersRouter from '../../routes/usersRouter';
 
 export const getGames = async (
   req: Request,
@@ -105,8 +104,37 @@ export const updateGame = async (
   }
 };
 
+export const verifyGamePassword = async (
+  req: Request<any, any, { password: string }>,
+  res: Response,
+  next: NextFunction
+) => {
+  const { id } = req.params;
+  const { password } = req.body;
+
+  if (!idFormatValidation(id)) {
+    return res.sendError({ message: 'Invalid Game ID format', status: 400 });
+  }
+
+  if (!password) {
+    return res.sendError({ message: 'Password is required', status: 400 });
+  }
+
+  try {
+    const isValid = await gamesService.verifyGamePassword(id, password);
+
+    if (!isValid) {
+      return res.sendError({ message: 'Invalid password', status: 401 });
+    }
+
+    res.sendResponse({ valid: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const addUserToGame = async (
-  req: Request<any, any, { userId: string }>,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {

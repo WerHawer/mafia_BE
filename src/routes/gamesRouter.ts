@@ -14,6 +14,7 @@ router.patch('/:id/restart', gamesController.restartGame);
 router.patch('/:id/start', gamesController.startGame);
 router.patch('/:id/startDay', gamesController.startDay);
 router.patch('/:id/startNight', gamesController.startNight);
+router.post('/:id/verify-password', gamesController.verifyGamePassword);
 router.patch('/:id/addUser/:userId', gamesController.addUserToGame);
 router.patch('/:id/removeUser/:userId', gamesController.removeUserFromGame);
 router.patch('/:id/addToProposed', gamesController.addUserToProposed);

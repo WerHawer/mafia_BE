@@ -9,4 +9,7 @@ export const createGamesShortData = (game: IGame): IGameShort => ({
   gm: game.gm,
   gameType: game.gameType,
   creatingTime: game.creatingTime,
+  maxPlayers: game.maxPlayers,
+  mafiaCount: game.mafiaCount,
+  additionalRoles: game.additionalRoles,
 });

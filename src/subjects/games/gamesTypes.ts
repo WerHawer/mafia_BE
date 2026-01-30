@@ -30,10 +30,13 @@ export interface IGame {
   id?: string;
   owner: string;
   players: string[];
+  maxPlayers: number;
   password?: string;
   isPrivate: boolean;
   isActive: boolean;
   gm: string;
+  mafiaCount: number;
+  additionalRoles: string[];
   mafia?: string[];
   citizens?: string[];
   sheriff?: string;
@@ -51,11 +54,14 @@ export interface IGameShort {
   id?: string;
   owner: string;
   playersCount: number;
+  maxPlayers: number;
   isPrivate: boolean;
   isActive: boolean;
   gm: string;
   gameType: GameType;
   creatingTime: number;
+  mafiaCount: number;
+  additionalRoles: string[];
 }
 
 export interface IGameDTO extends Omit<IGame, 'players'> {

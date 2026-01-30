@@ -74,6 +74,23 @@ export const updateGame = async (id: string, game: Partial<IGame>) =>
     }
   );
 
+export const verifyGamePassword = async (
+  id: string,
+  password: string
+): Promise<boolean> => {
+  const game = await Games.findById(id);
+
+  if (!game) {
+    throw new Error(`Game with id ${id} not found`);
+  }
+
+  if (!game.isPrivate) {
+    return true; // Public games don't need password
+  }
+
+  return game.password === password;
+};
+
 export const addGamePlayers = async (id: string, playerId: string) => {
   const game = await Games.findById(id);
 

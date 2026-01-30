@@ -1,6 +1,6 @@
 import { model, Schema } from 'mongoose';
-import { IGame } from './gamesTypes';
 import { DBSubject } from '../DBTypes';
+import { IGame } from './gamesTypes';
 
 const gamesSchema = new Schema<IGame>({
   owner: { type: String, required: true },
@@ -12,6 +12,9 @@ const gamesSchema = new Schema<IGame>({
   isPrivate: Boolean,
   isActive: { type: Boolean, required: true },
   gm: { type: String, required: true },
+  maxPlayers: { type: Number, required: true },
+  mafiaCount: { type: Number, required: true },
+  additionalRoles: [String],
   mafia: [String],
   citizens: [String],
   sheriff: String,
