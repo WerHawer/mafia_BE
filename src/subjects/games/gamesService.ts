@@ -187,6 +187,7 @@ export const startNight = async (id: string) => {
     {
       $set: {
         'gameFlow.isNight': true,
+        'gameFlow.prostituteBlock': '',
         ...resetDayNightFlow,
       },
     },
