@@ -166,11 +166,18 @@ export const startGame = async (id: string) => {
 };
 
 export const startDay = async (id: string) => {
+  const game = await Games.findById(id);
+  const block = game?.gameFlow.prostituteBlock || '';
+  const save = game?.gameFlow.doctorSave || '';
+
+  const newProstituteBlock = block === save && block !== '' ? '' : block;
+
   return Games.findOneAndUpdate(
     { _id: id },
     {
       $set: {
         'gameFlow.isNight': false,
+        'gameFlow.prostituteBlock': newProstituteBlock,
         ...resetDayNightFlow,
       },
       $inc: {
@@ -188,6 +195,7 @@ export const startNight = async (id: string) => {
       $set: {
         'gameFlow.isNight': true,
         'gameFlow.prostituteBlock': '',
+        'gameFlow.doctorSave': '',
         ...resetDayNightFlow,
       },
     },
