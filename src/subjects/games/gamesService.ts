@@ -253,11 +253,19 @@ export const addVote = async (
 export const addShoot = async (
   id: string,
   targetUserId: string,
-  shooterId: string
+  shooterId: string,
+  shot?: { x: number; y: number }
 ) => {
+  const defaultShot = { x: 50, y: 50 };
+
   return Games.findOneAndUpdate(
     { _id: id },
-    { $addToSet: { [`gameFlow.shoot.${targetUserId}`]: shooterId } },
+    {
+      $push: {
+        [`gameFlow.shoot.${targetUserId}.shooters`]: shooterId,
+        [`gameFlow.shoot.${targetUserId}.shots`]: shot ?? defaultShot,
+      },
+    },
     { new: true }
   );
 };

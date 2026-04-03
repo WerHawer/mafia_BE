@@ -439,7 +439,7 @@ export const addShoot = async (
   next: NextFunction
 ) => {
   const { id } = req.params;
-  const { targetUserId, shooterId } = req.body;
+  const { targetUserId, shooterId, shot } = req.body;
 
   if (!idFormatValidation(id)) {
     return res.sendError({ message: 'Invalid Game ID format', status: 400 });
@@ -465,7 +465,7 @@ export const addShoot = async (
   }
 
   try {
-    const game = await gamesService.addShoot(id, targetUserId, shooterId);
+    const game = await gamesService.addShoot(id, targetUserId, shooterId, shot);
 
     if (!game) {
       return res.sendError({ message: 'Game not found', status: 404 });
@@ -474,7 +474,7 @@ export const addShoot = async (
     res
       .sendResponse(game)
       .io.to(id)
-      .emit(wsEvents.shoot, { targetUserId, shooterId });
+      .emit(wsEvents.shoot, { targetUserId, shooterId, shot });
   } catch (error) {
     next(error);
   }
