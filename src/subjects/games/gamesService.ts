@@ -49,6 +49,7 @@ const resetDayNightFlow = {
   'gameFlow.shoot': {},
   'gameFlow.voted': {},
   'gameFlow.isVote': false,
+  'gameFlow.isReVote': false,
   'gameFlow.isExtraSpeech': false,
   'gameFlow.wakeUp': '',
   'gameFlow.sheriffCheck': '',
