@@ -126,6 +126,18 @@ export const wsFlow = (io: Server) => {
     });
 
     socket.on(wsEvents.messageSend, async (message) => {
+      const isDeadChat = message.to.id.endsWith('_dead');
+
+      if (isDeadChat) {
+        const roomId = message.to.id.replace('_dead', '');
+        const game = await gamesService.getGame(roomId);
+
+        if (!game?.gameFlow?.killed?.includes(message.sender)) {
+          console.log(`[Chat Block] User ${message.sender} tried to post in dead chat ${message.to.id} but is not dead.`);
+          return;
+        }
+      }
+
       const savedMessage = await messagesService.createMessage(message);
       await savedMessage.populate(messagesPopulate);
       const event = wsEvents.messageSend;

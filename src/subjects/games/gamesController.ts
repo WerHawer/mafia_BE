@@ -95,10 +95,24 @@ export const updateGame = async (
       normalizedGame.gameFlow.voted = {};
     }
 
-    res
-      .sendResponse(normalizedGame)
-      .io.to(id)
-      .emit(wsEvents.gameUpdate, normalizedGame);
+    const io = res.sendResponse(normalizedGame).io;
+
+    // Join newly killed players to the dead chat room
+    const killedPlayers: string[] = normalizedGame.gameFlow?.killed || [];
+    const deadRoom = `${id}_dead`;
+
+    for (const killedUserId of killedPlayers) {
+      const socketId = userSocketMap.get(killedUserId);
+      if (socketId) {
+        const targetSocket = io.sockets.sockets.get(socketId);
+        if (targetSocket && !targetSocket.rooms.has(deadRoom)) {
+          targetSocket.join(deadRoom);
+          console.log(`[DeadChat] User ${killedUserId} joined dead room ${deadRoom}`);
+        }
+      }
+    }
+
+    io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
   } catch (error) {
     next(error);
   }
@@ -263,10 +277,19 @@ export const restartGame = async (
       return res.sendError({ message: 'Game not found', status: 404 });
     }
 
-    res
-      .sendResponse(game)
-      .io.to(id)
-      .emit(wsEvents.gameUpdate, dataNormalize(game));
+    const io = res.sendResponse(dataNormalize(game)).io;
+
+    // Remove all sockets from the dead chat room on restart
+    const deadRoom = `${id}_dead`;
+    const socketsInDeadRoom = await io.in(deadRoom).fetchSockets();
+
+    for (const deadSocket of socketsInDeadRoom) {
+      deadSocket.leave(deadRoom);
+    }
+
+    console.log(`[DeadChat] Cleared ${socketsInDeadRoom.length} sockets from ${deadRoom} on restart`);
+
+    io.to(id).emit(wsEvents.gameUpdate, dataNormalize(game));
   } catch (error) {
     next(error);
   }
