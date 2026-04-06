@@ -29,6 +29,7 @@ const initialGameFlow = {
   wakeUp: [],
 };
 
+// Base reset state — does NOT include creatingTime (set only at game creation)
 const initialGame = {
   isActive: true,
   mafia: [],
@@ -39,7 +40,6 @@ const initialGame = {
   prostitute: '',
   startTime: null,
   finishTime: null,
-  creatingTime: Date.now(),
   gameFlow: initialGameFlow,
 };
 
@@ -62,7 +62,8 @@ export const getActiveGames = async () =>
 
 export const getGame = async (id: string) => Games.findById(id);
 
-export const createGame = async (game: IGame) => Games.create(game);
+export const createGame = async (game: IGame) =>
+  Games.create({ ...game, creatingTime: Date.now() });
 
 export const updateGame = async (id: string, game: Partial<IGame>) =>
   Games.findOneAndUpdate(
@@ -143,6 +144,7 @@ export const addGameRoles = async (id: string, roles: Partial<IGame>) =>
     { new: true, uesFindAndModify: false }
   );
 
+// creatingTime is intentionally excluded — it must never change after creation
 export const restartGame = async (id: string) =>
   Games.findOneAndUpdate(
     { _id: id },
