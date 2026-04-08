@@ -57,10 +57,11 @@ const resetDayNightFlow = {
   'gameFlow.donCheck': '',
 };
 
-export const getGames = async () => Games.find({}, undefined, { limit: 100 }).lean();
+// Список ігор не кешуємо — дані мають бути завжди актуальними
+export const getGames = async () => Games.find({}, undefined, { limit: 100 });
 
 export const getActiveGames = async () =>
-  Games.find({ isActive: true }, undefined, { limit: 100 }).lean();
+  Games.find({ isActive: true }, undefined, { limit: 100 });
 
 export const getGame = async (id: string) => {
   const cached = gameCache.get(id);
@@ -80,15 +81,17 @@ export const createGame = async (game: IGame) =>
   Games.create({ ...game, creatingTime: Date.now() });
 
 export const updateGame = async (id: string, game: Partial<IGame>) => {
-  gameCache.invalidate(id);
-  return Games.findOneAndUpdate(
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $set: game },
-    {
-      new: true,
-      uesFindAndModify: false,
-    }
+    { new: true, uesFindAndModify: false }
   );
+
+  if (updatedGame) {
+    gameCache.set(id, updatedGame);
+  }
+
+  return updatedGame;
 };
 
 export const verifyGamePassword = async (
@@ -125,16 +128,20 @@ export const addGamePlayers = async (id: string, playerId: string) => {
     return game;
   }
 
-  gameCache.invalidate(id);
-  return Games.findOneAndUpdate(
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $addToSet: { players: playerId } },
     { new: true }
   );
+
+  if (updatedGame) {
+    gameCache.set(id, updatedGame);
+  }
+
+  return updatedGame;
 };
 
 export const removeGamePlayers = async (id: string, playerId: string) => {
-  gameCache.invalidate(id);
   const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $pull: { players: playerId } },
@@ -142,6 +149,7 @@ export const removeGamePlayers = async (id: string, playerId: string) => {
   );
 
   if (updatedGame) {
+    gameCache.set(id, updatedGame);
     console.log(
       `[removeGamePlayers] Successfully removed player ${playerId}`,
       `(left: ${updatedGame.players.length})`
@@ -156,27 +164,36 @@ export const removeGamePlayers = async (id: string, playerId: string) => {
 };
 
 export const addGameRoles = async (id: string, roles: Partial<IGame>) => {
-  gameCache.invalidate(id);
-  return Games.findOneAndUpdate(
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $set: roles },
     { new: true, uesFindAndModify: false }
   );
+
+  if (updatedGame) {
+    gameCache.set(id, updatedGame);
+  }
+
+  return updatedGame;
 };
 
 // creatingTime is intentionally excluded — it must never change after creation
 export const restartGame = async (id: string) => {
-  gameCache.invalidate(id);
-  return Games.findOneAndUpdate(
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $set: initialGame },
     { new: true, uesFindAndModify: false }
   );
+
+  if (updatedGame) {
+    gameCache.set(id, updatedGame);
+  }
+
+  return updatedGame;
 };
 
 export const startGame = async (id: string) => {
-  gameCache.invalidate(id);
-  return Games.findOneAndUpdate(
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     {
       $set: {
@@ -188,17 +205,22 @@ export const startGame = async (id: string) => {
     },
     { new: true, uesFindAndModify: false }
   );
+
+  if (updatedGame) {
+    gameCache.set(id, updatedGame);
+  }
+
+  return updatedGame;
 };
 
 export const startDay = async (id: string) => {
-  gameCache.invalidate(id);
   const game = await Games.findById(id);
   const block = game?.gameFlow.prostituteBlock || '';
   const save = game?.gameFlow.doctorSave || '';
 
   const newProstituteBlock = block === save && block !== '' ? '' : block;
 
-  return Games.findOneAndUpdate(
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     {
       $set: {
@@ -212,11 +234,16 @@ export const startDay = async (id: string) => {
     },
     { new: true, uesFindAndModify: false }
   );
+
+  if (updatedGame) {
+    gameCache.set(id, updatedGame);
+  }
+
+  return updatedGame;
 };
 
 export const startNight = async (id: string) => {
-  gameCache.invalidate(id);
-  return Games.findOneAndUpdate(
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     {
       $set: {
@@ -228,6 +255,12 @@ export const startNight = async (id: string) => {
     },
     { new: true, uesFindAndModify: false }
   );
+
+  if (updatedGame) {
+    gameCache.set(id, updatedGame);
+  }
+
+  return updatedGame;
 };
 
 export const addUserToProposed = async (id: string, userId: string) => {
@@ -249,7 +282,6 @@ export const addUserToProposed = async (id: string, userId: string) => {
     return game;
   }
 
-  gameCache.invalidate(id);
   const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $addToSet: { 'gameFlow.proposed': userId } },
@@ -257,6 +289,7 @@ export const addUserToProposed = async (id: string, userId: string) => {
   );
 
   if (updatedGame) {
+    gameCache.set(id, updatedGame);
     console.log(
       `[addUserToProposed] Successfully added user ${userId}`,
       `(total: ${updatedGame.gameFlow.proposed.length})`
@@ -271,12 +304,17 @@ export const addVote = async (
   targetUserId: string,
   voterId: string
 ) => {
-  gameCache.invalidate(id);
-  return Games.findOneAndUpdate(
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $addToSet: { [`gameFlow.voted.${targetUserId}`]: voterId } },
     { new: true }
   );
+
+  if (updatedGame) {
+    gameCache.set(id, updatedGame);
+  }
+
+  return updatedGame;
 };
 
 export const addShoot = async (
@@ -285,10 +323,9 @@ export const addShoot = async (
   shooterId: string,
   shot?: { x: number; y: number }
 ) => {
-  gameCache.invalidate(id);
   const defaultShot = { x: 50, y: 50 };
 
-  return Games.findOneAndUpdate(
+  const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     {
       $push: {
@@ -298,4 +335,10 @@ export const addShoot = async (
     },
     { new: true }
   );
+
+  if (updatedGame) {
+    gameCache.set(id, updatedGame);
+  }
+
+  return updatedGame;
 };

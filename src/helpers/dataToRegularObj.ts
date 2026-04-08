@@ -9,9 +9,15 @@ export const dataToRegularObj = (data: Data | Data[]) => {
 
     Object.entries(obj).forEach(([key, value]) => {
       if (Array.isArray(value)) {
-        newObj[key] = value.map((val) =>
-          isMongooseDocument(val) ? val.toObject() : recursiveObjectCheck(val)
-        );
+        newObj[key] = value.map((val) => {
+          if (isMongooseDocument(val)) {
+            return val.toObject();
+          }
+          if (typeof val === 'object' && val !== null) {
+            return recursiveObjectCheck(val);
+          }
+          return val;
+        });
 
         return;
       }
