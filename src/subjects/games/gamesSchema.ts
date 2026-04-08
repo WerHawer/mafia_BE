@@ -48,4 +48,8 @@ const gamesSchema = new Schema<IGame>({
   },
 });
 
+gamesSchema.index({ isActive: 1 });
+gamesSchema.index({ creatingTime: -1 });
+gamesSchema.index({ isActive: 1, creatingTime: -1 });
+
 export const Games = model<IGame>(DBSubject.Games, gamesSchema);

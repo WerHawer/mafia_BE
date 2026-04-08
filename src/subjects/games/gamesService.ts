@@ -1,5 +1,6 @@
 import { Games } from './gamesSchema';
 import { IGame } from './gamesTypes';
+import { gameCache } from '../../helpers/cache';
 
 // export const gamePopulateOption = [
 //   Populate.Players,
@@ -56,18 +57,31 @@ const resetDayNightFlow = {
   'gameFlow.donCheck': '',
 };
 
-export const getGames = async () => Games.find({}, undefined, { limit: 100 });
+export const getGames = async () => Games.find({}, undefined, { limit: 100 }).lean();
 
 export const getActiveGames = async () =>
-  Games.find({ isActive: true }, undefined, { limit: 100 });
+  Games.find({ isActive: true }, undefined, { limit: 100 }).lean();
 
-export const getGame = async (id: string) => Games.findById(id);
+export const getGame = async (id: string) => {
+  const cached = gameCache.get(id);
+  if (cached) {
+    return cached;
+  }
+
+  const game = await Games.findById(id);
+  if (game) {
+    gameCache.set(id, game);
+  }
+
+  return game;
+};
 
 export const createGame = async (game: IGame) =>
   Games.create({ ...game, creatingTime: Date.now() });
 
-export const updateGame = async (id: string, game: Partial<IGame>) =>
-  Games.findOneAndUpdate(
+export const updateGame = async (id: string, game: Partial<IGame>) => {
+  gameCache.invalidate(id);
+  return Games.findOneAndUpdate(
     { _id: id },
     { $set: game },
     {
@@ -75,6 +89,7 @@ export const updateGame = async (id: string, game: Partial<IGame>) =>
       uesFindAndModify: false,
     }
   );
+};
 
 export const verifyGamePassword = async (
   id: string,
@@ -110,6 +125,7 @@ export const addGamePlayers = async (id: string, playerId: string) => {
     return game;
   }
 
+  gameCache.invalidate(id);
   return Games.findOneAndUpdate(
     { _id: id },
     { $addToSet: { players: playerId } },
@@ -118,6 +134,7 @@ export const addGamePlayers = async (id: string, playerId: string) => {
 };
 
 export const removeGamePlayers = async (id: string, playerId: string) => {
+  gameCache.invalidate(id);
   const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $pull: { players: playerId } },
@@ -138,22 +155,27 @@ export const removeGamePlayers = async (id: string, playerId: string) => {
   return updatedGame;
 };
 
-export const addGameRoles = async (id: string, roles: Partial<IGame>) =>
-  Games.findOneAndUpdate(
+export const addGameRoles = async (id: string, roles: Partial<IGame>) => {
+  gameCache.invalidate(id);
+  return Games.findOneAndUpdate(
     { _id: id },
     { $set: roles },
     { new: true, uesFindAndModify: false }
   );
+};
 
 // creatingTime is intentionally excluded — it must never change after creation
-export const restartGame = async (id: string) =>
-  Games.findOneAndUpdate(
+export const restartGame = async (id: string) => {
+  gameCache.invalidate(id);
+  return Games.findOneAndUpdate(
     { _id: id },
     { $set: initialGame },
     { new: true, uesFindAndModify: false }
   );
+};
 
 export const startGame = async (id: string) => {
+  gameCache.invalidate(id);
   return Games.findOneAndUpdate(
     { _id: id },
     {
@@ -169,6 +191,7 @@ export const startGame = async (id: string) => {
 };
 
 export const startDay = async (id: string) => {
+  gameCache.invalidate(id);
   const game = await Games.findById(id);
   const block = game?.gameFlow.prostituteBlock || '';
   const save = game?.gameFlow.doctorSave || '';
@@ -192,6 +215,7 @@ export const startDay = async (id: string) => {
 };
 
 export const startNight = async (id: string) => {
+  gameCache.invalidate(id);
   return Games.findOneAndUpdate(
     { _id: id },
     {
@@ -225,6 +249,7 @@ export const addUserToProposed = async (id: string, userId: string) => {
     return game;
   }
 
+  gameCache.invalidate(id);
   const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $addToSet: { 'gameFlow.proposed': userId } },
@@ -246,6 +271,7 @@ export const addVote = async (
   targetUserId: string,
   voterId: string
 ) => {
+  gameCache.invalidate(id);
   return Games.findOneAndUpdate(
     { _id: id },
     { $addToSet: { [`gameFlow.voted.${targetUserId}`]: voterId } },
@@ -259,6 +285,7 @@ export const addShoot = async (
   shooterId: string,
   shot?: { x: number; y: number }
 ) => {
+  gameCache.invalidate(id);
   const defaultShot = { x: 50, y: 50 };
 
   return Games.findOneAndUpdate(

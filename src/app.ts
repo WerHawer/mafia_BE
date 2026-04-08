@@ -21,6 +21,7 @@ import { responseErrorMiddleware } from './middlewares/responseErrorMiddleware';
 import loginRouter from './routes/loginRouter';
 import { auth } from './middlewares/auth';
 import registrationRouter from './routes/registrationRouter';
+import { slowQueryLogger } from './middlewares/slowQueryLogger';
 
 dotenv.config();
 
@@ -43,6 +44,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(cors());
 app.use(morgan('dev'));
+app.use(slowQueryLogger);
 app.use(responseNormalizeMiddleware);
 app.use(responseErrorMiddleware);
 app.use(responseWithIo(io));
@@ -63,7 +65,28 @@ app.use('/messages', messagesRouter);
 app.use(errorLogger);
 app.use(errorHandler);
 
-const connection = mongoose.connect(mongoURI, { dbName: 'mafia' });
+const connection = mongoose.connect(mongoURI, {
+  dbName: 'mafia',
+  maxPoolSize: 10,
+  minPoolSize: 2,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  connectTimeoutMS: 10000,
+});
+
+if (process.env.NODE_ENV === 'development') {
+  mongoose.set('debug', (collectionName: string, method: string, query: any, doc: any) => {
+    const start = Date.now();
+    console.log(`[MongoDB] ${collectionName}.${method}`, JSON.stringify(query));
+
+    setImmediate(() => {
+      const duration = Date.now() - start;
+      if (duration > 100) {
+        console.warn(`[SLOW DB QUERY] ${collectionName}.${method} took ${duration}ms`);
+      }
+    });
+  });
+}
 
 connection
   .then(() => {
