@@ -250,10 +250,13 @@ export const addRolesToGame = async (
       return res.sendError({ message: 'Game not found', status: 404 });
     }
 
+    const normalizedGame = dataNormalize(game);
+
     res
-      .sendResponse(game)
+      .status(200)
+      .json(normalizedGame)
       .io.to(id)
-      .emit(wsEvents.gameUpdate, dataNormalize(game));
+      .emit(wsEvents.gameUpdate, normalizedGame);
   } catch (error) {
     next(error);
   }

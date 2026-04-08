@@ -38,6 +38,7 @@ export enum wsEvents {
   userCameraStatusChanged = 'userCameraStatusChanged',
   userMicrophoneStatusChanged = 'userMicrophoneStatusChanged',
   batchToggleMicrophones = 'batchToggleMicrophones',
+  batchToggleCameras = 'batchToggleCameras',
 }
 
 export const userSocketMap = new Map<string, string>();
@@ -489,6 +490,127 @@ export const wsFlow = (io: Server) => {
           console.error('Error in batch microphone toggle:', error);
           socket.emit('error', {
             message: 'Failed to perform batch microphone operation',
+            details: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    );
+
+    socket.on(
+      wsEvents.batchToggleCameras,
+      async ({
+        roomId,
+        enabled,
+        targetUserIds,
+        excludedUserIds,
+        requesterId,
+      }: {
+        roomId: string;
+        enabled: boolean;
+        targetUserIds: string[];
+        excludedUserIds: string[];
+        requesterId: string;
+      }) => {
+        try {
+          if (!roomId || !requesterId || !targetUserIds) {
+            socket.emit('error', {
+              message: 'Missing required parameters for batch operation',
+            });
+            return;
+          }
+
+          const game = await gamesService.getGame(roomId);
+
+          if (!game) {
+            socket.emit('error', { message: 'Game not found' });
+            return;
+          }
+
+          const isGM = game.gm === requesterId;
+
+          if (!isGM) {
+            socket.emit('error', {
+              message: 'Access denied: Only GM can use batch controls',
+            });
+            console.log(
+              `Access denied: ${requesterId} tried to use batch camera control (isGM: ${isGM})`
+            );
+            return;
+          }
+
+          const usersToProcess = targetUserIds.filter(
+            (userId) => !excludedUserIds.includes(userId)
+          );
+
+          console.log(
+            `[Batch] Processing ${usersToProcess.length} users (excluded: ${excludedUserIds.length}) - ${enabled ? 'enabling' : 'disabling'} cameras`
+          );
+
+          const shouldMute = !enabled;
+
+          if (shouldMute) {
+            const results = await Promise.allSettled(
+              usersToProcess.map(async (userId) => {
+                try {
+                  await livekitService.muteParticipantTrackBySource(
+                    roomId,
+                    userId,
+                    'camera',
+                    true
+                  );
+
+                  io.to(roomId).emit(wsEvents.userCameraStatusChanged, {
+                    userId,
+                    participantIdentity: userId,
+                    enabled: false,
+                    targetIdentity: userId,
+                  });
+
+                  return { userId, success: true };
+                } catch (error) {
+                  console.error(
+                    `[Batch] Failed to mute camera for user ${userId}:`,
+                    error
+                  );
+                  return { userId, success: false, error };
+                }
+              })
+            );
+
+            const successful = results.filter(
+              (r) => r.status === 'fulfilled' && r.value.success
+            );
+            console.log(
+              `[Batch] Muted ${successful.length}/${usersToProcess.length} cameras`
+            );
+          } else {
+            console.log(
+              `[Batch] Unmute request - sending commands to ${usersToProcess.length} clients`
+            );
+
+            usersToProcess.forEach((userId) => {
+              io.to(roomId).emit(wsEvents.userCameraStatusChanged, {
+                userId,
+                participantIdentity: userId,
+                enabled: true,
+                targetIdentity: userId,
+              });
+            });
+
+            console.log(
+              `[Batch] Sent unmute camera commands to ${usersToProcess.length} users`
+            );
+          }
+
+          socket.emit('batchOperationComplete', {
+            operation: 'toggleCameras',
+            enabled,
+            processedCount: usersToProcess.length,
+          });
+        } catch (error) {
+          console.error('Error in batch camera toggle:', error);
+          socket.emit('error', {
+            message: 'Failed to perform batch camera operation',
             details: error instanceof Error ? error.message : String(error),
           });
         }

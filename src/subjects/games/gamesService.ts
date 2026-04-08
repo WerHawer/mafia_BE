@@ -164,6 +164,19 @@ export const removeGamePlayers = async (id: string, playerId: string) => {
 };
 
 export const addGameRoles = async (id: string, roles: Partial<IGame>) => {
+  const cachedGame = gameCache.get(id);
+
+  if (cachedGame) {
+    // updateOne is faster — sends only { acknowledged: true } back instead of the full document
+    await Games.updateOne({ _id: id }, { $set: roles });
+
+    const cachedObject = cachedGame.toObject ? cachedGame.toObject() : cachedGame;
+    const updatedGame = { ...cachedObject, ...roles };
+    gameCache.set(id, updatedGame);
+
+    return updatedGame;
+  }
+
   const updatedGame = await Games.findOneAndUpdate(
     { _id: id },
     { $set: roles },
