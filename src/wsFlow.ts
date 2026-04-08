@@ -1,5 +1,4 @@
 import { Server } from 'socket.io';
-import * as gamesController from './subjects/games/gamesController';
 import * as messagesService from './subjects/messages/messagesService';
 import { dataNormalize } from './helpers/dataNormalize';
 import { messagesPopulate } from './subjects/messages/messagesService';
@@ -126,6 +125,33 @@ export const wsFlow = (io: Server) => {
     });
 
     socket.on(wsEvents.messageSend, async (message) => {
+      if (!message?.to) {
+        console.error('[Chat Error] Invalid message format - missing "to" property');
+        return;
+      }
+
+      if (!message.to.type) {
+        console.error('[Chat Error] Invalid message format - missing "to.type" property');
+        return;
+      }
+
+      // For public chat (type === 'all'), we don't need to.id
+      if (message.to.type === 'all') {
+        const savedMessage = await messagesService.createMessage(message);
+        await savedMessage.populate(messagesPopulate);
+        const event = wsEvents.messageSend;
+        const data = dataNormalize(savedMessage);
+
+        io.emit(event, data);
+        return;
+      }
+
+      // For room-based chats, we need to.id
+      if (!message.to.id) {
+        console.error('[Chat Error] Invalid message format - missing "to.id" property for room-based chat');
+        return;
+      }
+
       const isDeadChat = message.to.id.endsWith('_dead');
 
       if (isDeadChat) {
@@ -143,11 +169,6 @@ export const wsFlow = (io: Server) => {
       const event = wsEvents.messageSend;
       const data = dataNormalize(savedMessage);
 
-      if (message.to.type === 'all') {
-        io.emit(event, data);
-
-        return;
-      }
 
       io.to(message.to.id).emit(event, data);
     });
