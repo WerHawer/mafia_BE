@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { RequestHandler } from 'express';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
@@ -56,7 +56,7 @@ app.use(shrinkRay({
     }
     return shrinkRay.filter(req, res);
   },
-}));
+}) as unknown as RequestHandler);
 app.use(slowQueryLogger);
 app.use(responseNormalizeMiddleware);
 app.use(responseErrorMiddleware);
