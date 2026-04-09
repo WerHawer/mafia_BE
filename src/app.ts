@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 import cors from 'cors';
+import shrinkRay from 'shrink-ray-current';
 import * as mongoose from 'mongoose';
 import gamesRouter from './routes/gamesRouter';
 import usersRouter from './routes/usersRouter';
@@ -44,6 +45,18 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(cors());
 app.use(morgan('dev'));
+app.use(shrinkRay({
+  brotli: { quality: 4 },
+  zlib: { level: 6 },
+  threshold: 1024,
+  filter: (req, res) => {
+    // Skip compression for WebSocket upgrade requests
+    if (req.headers.upgrade === 'websocket') {
+      return false;
+    }
+    return shrinkRay.filter(req, res);
+  },
+}));
 app.use(slowQueryLogger);
 app.use(responseNormalizeMiddleware);
 app.use(responseErrorMiddleware);
