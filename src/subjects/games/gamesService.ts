@@ -170,7 +170,9 @@ export const addGameRoles = async (id: string, roles: Partial<IGame>) => {
     // updateOne is faster — sends only { acknowledged: true } back instead of the full document
     await Games.updateOne({ _id: id }, { $set: roles });
 
-    const cachedObject = cachedGame.toObject ? cachedGame.toObject() : cachedGame;
+    const cachedObject = cachedGame.toObject
+      ? cachedGame.toObject()
+      : cachedGame;
     const updatedGame = { ...cachedObject, ...roles };
     gameCache.set(id, updatedGame);
 
@@ -357,5 +359,4 @@ export const addShoot = async (
 };
 
 export const findGameByPlayerId = async (playerId: string) =>
-  Games.findOne({ players: playerId, isActive: true });
-
+  Games.findOne({ players: playerId });
