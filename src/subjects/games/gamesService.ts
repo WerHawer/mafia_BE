@@ -355,3 +355,7 @@ export const addShoot = async (
 
   return updatedGame;
 };
+
+export const findGameByPlayerId = async (playerId: string) =>
+  Games.findOne({ players: playerId, isActive: true });
+

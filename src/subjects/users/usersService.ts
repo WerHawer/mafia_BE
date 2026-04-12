@@ -30,3 +30,7 @@ export const deleteUserAvatar = async (id: string) =>
 
 export const getUsersByIds = async (ids: string[]) =>
   Users.find({ _id: { $in: ids } }, undefined, usersOptions);
+
+export const setUserOnlineStatus = async (id: string, isOnline: boolean) =>
+  Users.findByIdAndUpdate(id, { isOnline }, { new: true });
+

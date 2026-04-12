@@ -33,6 +33,9 @@ const io = new Server(httpServer, {
   cors: {
     origin: '*',
   },
+  // Reduced from defaults (25s/20s) so crashed clients are detected in ~18s instead of ~45s
+  pingInterval: 10000,
+  pingTimeout: 8000,
 });
 
 wsFlow(io);

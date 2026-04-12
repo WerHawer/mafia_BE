@@ -2,7 +2,11 @@ import * as userService from './usersService';
 import { NextFunction, Request, Response } from 'express';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
 import { createNewUserObj } from '../../helpers/createNewUser';
-import { deleteFileFromAWS, uploadFileToAWS } from '../../awsSdk';
+import {
+  deleteFileFromAWS,
+  uploadFileToAWS,
+  checkImageModeration,
+} from '../../awsSdk';
 import { Populate } from '../DBTypes';
 import { IUserAvatar } from './usersTypes';
 import { createToken } from '../../helpers/createToken';
@@ -188,7 +192,22 @@ export const updateUserAvatar = async (
       return res.status(404).send(`User with id: ${id} not found`);
     }
 
+    // Check content BEFORE uploading to S3 — avoids unnecessary upload + delete cycle
+    const moderation = await checkImageModeration(path);
+
+    if (!moderation.safe) {
+      const isServiceUnavailable =
+        moderation.reason === 'Content moderation service unavailable';
+
+      return res.status(400).json({
+        message: isServiceUnavailable
+          ? 'Unable to process image at this time. Please try again later.'
+          : `Image contains inappropriate content and cannot be used as an avatar. ${isServiceUnavailable ? undefined : moderation.reason}`,
+      });
+    }
+
     const avatarUrl = await uploadFileToAWS(path, dateName);
+
     const avatar = await userService.uploadUserAvatar(avatarUrl);
 
     const prevAvatar = user.avatar?.[0] as IUserAvatar;

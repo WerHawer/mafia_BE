@@ -6,6 +6,7 @@ import { livekitService } from './services/livekitService';
 import { socketEventsGameFlow } from './socketFlows/socketEventsGameFlow';
 import * as gamesService from './subjects/games/gamesService';
 import { createGamesShortData } from './helpers/createGamesShortData';
+import * as usersService from './subjects/users/usersService';
 
 export enum OffParams {
   Other = 'other',
@@ -43,6 +44,48 @@ export enum wsEvents {
 
 export const userSocketMap = new Map<string, string>();
 
+// Tracks pending "remove from game" timers per userId for graceful reconnect support
+const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+// How long to wait before treating a disconnected player as permanently gone
+const GRACEFUL_RECONNECT_TIMEOUT_MS = 30_000;
+
+const handlePlayerDisconnectTimeout = async (
+  userId: string,
+  io: Server
+): Promise<void> => {
+  try {
+    await usersService.setUserOnlineStatus(userId, false);
+
+    const game = await gamesService.findGameByPlayerId(userId);
+
+    if (!game) {
+      console.log(`[Disconnect] User ${userId} was not in any active game`);
+      return;
+    }
+
+    const gameId = game._id.toString();
+
+    let updatedGame = await gamesService.removeGamePlayers(gameId, userId);
+
+    if (!updatedGame) {
+      console.error(`[Disconnect] Failed to remove user ${userId} from game ${gameId}`);
+      return;
+    }
+
+    // Deactivate the game when the last player leaves
+    if (updatedGame.players.length === 0) {
+      updatedGame = await gamesService.updateGame(gameId, { isActive: false });
+    }
+
+    io.to(gameId).emit(wsEvents.gameUpdate, dataNormalize(updatedGame));
+
+    console.log(`[Disconnect] Removed user ${userId} from game ${gameId} after graceful timeout`);
+  } catch (error) {
+    console.error(`[Disconnect] Error handling disconnect for user ${userId}:`, error);
+  }
+};
+
 export const wsFlow = (io: Server) => {
   const participantsMap = new Map<
     string,
@@ -63,10 +106,24 @@ export const wsFlow = (io: Server) => {
     console.log(
       `SOCKET User connected! connected users: ${io.sockets.sockets.size}`
     );
-    const userId = socket.handshake.auth.userId;
+    const userId = socket.handshake.auth.userId as string | undefined;
 
     if (userId) {
       userSocketMap.set(userId, socket.id);
+      socket.data.userId = userId;
+
+      // Cancel any pending "remove from game" timer from a previous disconnect
+      const pendingTimer = disconnectTimers.get(userId);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        disconnectTimers.delete(userId);
+        console.log(`[Reconnect] Cancelled pending disconnect timer for user ${userId}`);
+      }
+
+      // Mark user as online again in case the timer had already fired
+      await usersService.setUserOnlineStatus(userId, true).catch((error) => {
+        console.error(`[Connect] Failed to set user ${userId} online:`, error);
+      });
     }
 
     io.emit(wsEvents.connection, {
@@ -175,7 +232,7 @@ export const wsFlow = (io: Server) => {
     });
 
     socket.on(wsEvents.disconnect, async () => {
-      // Clean up participant data
+      // Clean up LiveKit participant data
       for (const [participantIdentity, data] of participantsMap.entries()) {
         if (data.user.id === socket.id) {
           try {
@@ -195,10 +252,26 @@ export const wsFlow = (io: Server) => {
         }
       }
 
-      if (userId) {
-        userSocketMap.delete(userId);
+      const disconnectedUserId = socket.data.userId as string | undefined;
+
+      if (disconnectedUserId) {
+        userSocketMap.delete(disconnectedUserId);
+
+        // Start a grace period before removing the player from the game.
+        // This allows players who briefly lose connectivity to rejoin without losing their spot.
+        const timer = setTimeout(() => {
+          disconnectTimers.delete(disconnectedUserId);
+          handlePlayerDisconnectTimeout(disconnectedUserId, io);
+        }, GRACEFUL_RECONNECT_TIMEOUT_MS);
+
+        disconnectTimers.set(disconnectedUserId, timer);
+
+        console.log(
+          `[Disconnect] Started ${GRACEFUL_RECONNECT_TIMEOUT_MS / 1000}s grace timer for user ${disconnectedUserId}`
+        );
       }
 
+      // Emit updated connected-user count immediately — socket count is already decremented
       io.emit(wsEvents.socketDisconnect, io.sockets.sockets.size);
 
       console.log(

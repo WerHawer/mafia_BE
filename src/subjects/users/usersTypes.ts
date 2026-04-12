@@ -3,7 +3,7 @@ import { Types } from 'mongoose';
 export interface IUser {
   nikName: string;
   friendList: [];
-  isOnline: true;
+  isOnline: boolean;
   avatar?: IUserAvatar[] | Types.ObjectId[];
   password?: string;
   // history: [],
