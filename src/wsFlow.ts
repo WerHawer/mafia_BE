@@ -47,14 +47,23 @@ export const userSocketMap = new Map<string, string>();
 // Tracks pending "remove from game" timers per userId for graceful reconnect support
 const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-// How long to wait before treating a disconnected player as permanently gone
-const GRACEFUL_RECONNECT_TIMEOUT_MS = 30_000;
+// How long to wait before treating a disconnected player as permanently gone.
+// Gives enough time for brief network hiccups / page refreshes, but short enough
+// to feel responsive when a player genuinely closes the browser.
+const GRACEFUL_RECONNECT_TIMEOUT_MS = 15_000;
 
 const handlePlayerDisconnectTimeout = async (
   userId: string,
   io: Server
 ): Promise<void> => {
   try {
+    // Safety check: if the user reconnected before the timer fired, abort removal.
+    // This prevents a race condition where the timer fires just after a new connection arrives.
+    if (userSocketMap.has(userId)) {
+      console.log(`[Disconnect] User ${userId} already reconnected — skipping game removal`);
+      return;
+    }
+
     await usersService.setUserOnlineStatus(userId, false);
 
     const game = await gamesService.findGameByPlayerId(userId);
@@ -80,7 +89,15 @@ const handlePlayerDisconnectTimeout = async (
 
     io.to(gameId).emit(wsEvents.gameUpdate, dataNormalize(updatedGame));
 
-    console.log(`[Disconnect] Removed user ${userId} from game ${gameId} after graceful timeout`);
+    // Notify all clients that the player has left the room so the FE
+    // can update the participant list without requiring a manual page refresh.
+    io.emit(wsEvents.roomLeave, {
+      userId,
+      roomId: gameId,
+      game: createGamesShortData(updatedGame),
+    });
+
+    console.log(`[Disconnect] Removed user ${userId} from game ${gameId} after ${GRACEFUL_RECONNECT_TIMEOUT_MS / 1000}s graceful timeout`);
   } catch (error) {
     console.error(`[Disconnect] Error handling disconnect for user ${userId}:`, error);
   }
@@ -231,7 +248,7 @@ export const wsFlow = (io: Server) => {
       io.to(message.to.id).emit(event, data);
     });
 
-    socket.on(wsEvents.disconnect, async () => {
+    socket.on(wsEvents.disconnect, async (reason) => {
       // Clean up LiveKit participant data
       for (const [participantIdentity, data] of participantsMap.entries()) {
         if (data.user.id === socket.id) {
@@ -252,7 +269,13 @@ export const wsFlow = (io: Server) => {
         }
       }
 
-      const disconnectedUserId = socket.data.userId as string | undefined;
+      // socket.data.userId is the primary source; fall back to handshake auth
+      // in case socket.data was not populated (e.g. connection handler error)
+      const disconnectedUserId =
+        (socket.data.userId as string | undefined) ??
+        (socket.handshake.auth.userId as string | undefined);
+
+      console.log(`[Disconnect] Socket ${socket.id} disconnected. Reason: ${reason}. UserId: ${disconnectedUserId ?? 'unknown'}`);
 
       if (disconnectedUserId) {
         userSocketMap.delete(disconnectedUserId);
@@ -269,6 +292,8 @@ export const wsFlow = (io: Server) => {
         console.log(
           `[Disconnect] Started ${GRACEFUL_RECONNECT_TIMEOUT_MS / 1000}s grace timer for user ${disconnectedUserId}`
         );
+      } else {
+        console.warn(`[Disconnect] Socket ${socket.id} disconnected without a userId — game cleanup skipped`);
       }
 
       // Emit updated connected-user count immediately — socket count is already decremented
