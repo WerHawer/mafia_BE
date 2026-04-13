@@ -11,6 +11,9 @@ import { Populate } from '../DBTypes';
 import { IUserAvatar } from './usersTypes';
 import { createToken } from '../../helpers/createToken';
 import { comparePassword } from '../../helpers/comparePassword';
+import * as messagesService from '../messages/messagesService';
+import { wsEvents } from '../../wsFlow';
+import { dataNormalize } from '../../helpers/dataNormalize';
 
 export const getAllUsers = async (
   req: Request,
@@ -223,9 +226,17 @@ export const updateUserAvatar = async (
     await user.save();
     await user.populate(Populate.Avatar);
 
+    // Оновлення повідомлень (з новими аватарками) та розсилка всім підключеним
+    const updatedMessages = await messagesService.getAllPublicMessages();
+    const normalizedMessages = dataNormalize(updatedMessages);
+
+    // Скидання кешу повідомлень на фронтендах (усіх клієнтів)
+    res.io.emit(wsEvents.messagesUpdate, normalizedMessages);
+
     res.sendResponse({
       description,
       user,
+      messages: normalizedMessages,
       message: 'Avatar updated successfully',
     });
   } catch (error) {
@@ -268,7 +279,17 @@ export const deleteUserAvatar = async (
   try {
     await userService.deleteUserAvatar(avatarId);
 
-    res.status(200).json({ message: 'Avatar deleted successfully' });
+    // Скидання кешу повідомлень і розсилка оновленого списку (без аватарки)
+    const updatedMessages = await messagesService.getAllPublicMessages();
+    const normalizedMessages = dataNormalize(updatedMessages);
+
+    res.io.emit(wsEvents.messagesUpdate, normalizedMessages);
+
+    // Зверніть увагу: ми використовуємо розширений sendResponse
+    res.sendResponse({
+      message: 'Avatar deleted successfully',
+      messages: normalizedMessages
+    });
   } catch (error) {
     next(error);
   }

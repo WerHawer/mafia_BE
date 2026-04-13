@@ -23,6 +23,7 @@ export enum wsEvents {
   socketDisconnect = 'socketDisconnect',
   gameUpdate = 'gameUpdate',
   gamesUpdate = 'gamesUpdate',
+  messagesUpdate = 'messagesUpdate',
   userAudioStatus = 'userAudioStatus',
   userVideoStatus = 'userVideoStatus',
   userStreamStatus = 'userStreamStatus',
