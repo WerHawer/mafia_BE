@@ -37,7 +37,7 @@ export const dataNormalize = <
       }
 
       if (key === 'avatar') {
-        newData[key] = value[0]?.url;
+        newData[key] = Array.isArray(value) ? value[0]?.url : value?.url ?? value;
 
         return;
       }
