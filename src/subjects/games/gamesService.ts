@@ -2,6 +2,78 @@ import { Games } from './gamesSchema';
 import { IGame } from './gamesTypes';
 import { gameCache } from '../../helpers/cache';
 
+/**
+ * Converts a Mongoose Document (or already-plain object) into a normalized plain JS object:
+ * - Ensures `id` (string) is always present alongside `_id`
+ * - Converts `players` array entries from ObjectId to string to allow reliable includes/indexOf comparisons
+ *
+ * This is critical because `toObject()` keeps ObjectIds as-is, which breaks string comparisons.
+ */
+const toPlainGameObj = (game: any): any => {
+  const obj: Record<string, any> = game.toObject ? game.toObject() : { ...game };
+
+  if (!obj.id && obj._id) {
+    obj.id = obj._id.toString();
+  }
+
+  if (Array.isArray(obj.players)) {
+    obj.players = obj.players.map((p: any) =>
+      p != null && typeof p.toString === 'function' ? p.toString() : p
+    );
+  }
+
+  return obj;
+};
+
+// --- STATEFUL SERVER (Write-Behind Aggegator) ---
+const dirtyGames = new Set<string>();
+
+export const markGameDirty = (id: string | undefined | null) => {
+  if (id) dirtyGames.add(id.toString());
+};
+
+setInterval(async () => {
+  if (dirtyGames.size === 0) return;
+
+  const gamesToSave = Array.from(dirtyGames);
+  dirtyGames.clear();
+
+  const startDb = Date.now();
+  try {
+    const promises = gamesToSave.map(async (id) => {
+      const gameObj = gameCache.get(id) as any;
+      if (!gameObj) return;
+
+      // Клонуємо об'єкт щоб не мутувати його в пам'яті під час видалення _id
+      const copy = { ...gameObj };
+      delete copy._id;
+
+      return Games.updateOne({ _id: id }, { $set: copy }).exec();
+    });
+
+    await Promise.allSettled(promises);
+    console.log(`[DB Write-Behind Flush] Aggregated and saved ${gamesToSave.length} games to MongoDB in ${Date.now() - startDb}ms`);
+  } catch (error) {
+    console.error('[DB Write-Behind Flush] Error:', error);
+  }
+}, 15000); // Фіксація в базу кожні 15 секунд
+
+export const forceSaveGame = (id: string) => {
+  dirtyGames.delete(id.toString()); // Видаляємо з черги агрегатора
+  const gameObj = gameCache.get(id) as any;
+  if (!gameObj) return;
+
+  const copy = { ...gameObj };
+  delete copy._id;
+
+  const startDb = Date.now();
+  Games.updateOne({ _id: id }, { $set: copy })
+    .exec()
+    .then(() => console.log(`[DB Force Save] Game ${id} saved instantly in ${Date.now() - startDb}ms`))
+    .catch(e => console.error('[DB Force Save Error]:', e));
+};
+// ------------------------------------------------
+
 // export const gamePopulateOption = [
 //   Populate.Players,
 //   Populate.GM,
@@ -64,41 +136,61 @@ export const getActiveGames = async () =>
   Games.find({ isActive: true }, undefined, { limit: 100 });
 
 export const getGame = async (id: string) => {
-  const cached = gameCache.get(id);
+  const idStr = typeof id === 'string' ? id : String(id);
+
+  if (!idStr || idStr === '[object Object]') {
+    console.error('[getGame] Invalid game id received:', id);
+    return null;
+  }
+
+  const cached = gameCache.get(idStr);
   if (cached) {
     return cached;
   }
 
-  const game = await Games.findById(id);
+  const game = await Games.findById(idStr);
   if (game) {
-    gameCache.set(id, game);
+    const plainGame = toPlainGameObj(game);
+    gameCache.set(idStr, plainGame);
+    return plainGame;
   }
 
-  return game;
+  return null;
 };
 
 export const createGame = async (game: IGame) =>
   Games.create({ ...game, creatingTime: Date.now() });
 
-export const updateGame = async (id: string, game: Partial<IGame>) => {
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    { $set: game },
-    { new: true, uesFindAndModify: false }
-  );
+export const updateGame = async (id: string, gameUpdates: Partial<IGame>) => {
+  const game = await getGame(id);
+  if (!game) return null;
 
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
+  const gameObj = toPlainGameObj(game);
+
+  // Оновлюємо кеш (підтримує dot-notation, напр. 'gameFlow.speaker')
+  for (const [key, value] of Object.entries(gameUpdates)) {
+    const parts = key.split('.');
+    let current = gameObj as any;
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (current[parts[i]] === undefined) {
+        current[parts[i]] = {};
+      }
+      current = current[parts[i]];
+    }
+    current[parts[parts.length - 1]] = value;
   }
 
-  return updatedGame;
+  gameCache.set(id, gameObj);
+  markGameDirty(id); // Записали зміну, база оновить сама через 5 секунд
+
+  return gameObj;
 };
 
 export const verifyGamePassword = async (
   id: string,
   password: string
 ): Promise<boolean> => {
-  const game = await Games.findById(id);
+  const game = await getGame(id);
 
   if (!game) {
     throw new Error(`Game with id ${id} not found`);
@@ -112,206 +204,173 @@ export const verifyGamePassword = async (
 };
 
 export const addGamePlayers = async (id: string, playerId: string) => {
-  const game = await Games.findById(id);
+  const game = await getGame(id);
 
   if (!game) {
     console.error(`[addGamePlayers] Game with id ${id} not found`);
     throw new Error(`Game with id ${id} not found`);
   }
 
-  console.log(
-    `[addGamePlayers] Current players:`,
-    `(count: ${game.players.length})`
-  );
+  const gameObj = toPlainGameObj(game);
 
-  if (game.players.includes(playerId)) {
-    return game;
+  if (!gameObj.players.includes(playerId)) {
+    gameObj.players.push(playerId);
+    gameCache.set(id, gameObj);
+    markGameDirty(id);
   }
 
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    { $addToSet: { players: playerId } },
-    { new: true }
-  );
+  console.log(`[addGamePlayers] Current players: (count: ${gameObj.players.length})`);
 
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
-  }
-
-  return updatedGame;
+  return gameObj;
 };
 
 export const removeGamePlayers = async (id: string, playerId: string) => {
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    { $pull: { players: playerId } },
-    { new: true }
-  );
+  const game = await getGame(id);
+  if (!game) return null;
 
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
-    console.log(
-      `[removeGamePlayers] Successfully removed player ${playerId}`,
-      `(left: ${updatedGame.players.length})`
-    );
+  const gameObj = toPlainGameObj(game);
+  const index = gameObj.players.indexOf(playerId);
+
+  if (index > -1) {
+    gameObj.players.splice(index, 1);
+    gameCache.set(id, gameObj);
+    markGameDirty(id);
+    console.log(`[removeGamePlayers] Successfully removed player ${playerId} (left: ${gameObj.players.length})`);
   } else {
-    console.error(
-      `[removeGamePlayers] Failed to remove player from game ${id}`
-    );
+    console.error(`[removeGamePlayers] Failed to find player ${playerId} in game ${id}`);
   }
 
-  return updatedGame;
+  return gameObj;
 };
 
 export const addGameRoles = async (id: string, roles: Partial<IGame>) => {
-  const cachedGame = gameCache.get(id);
+  const game = await getGame(id);
+  if (!game) return null;
 
-  if (cachedGame) {
-    // updateOne is faster — sends only { acknowledged: true } back instead of the full document
-    await Games.updateOne({ _id: id }, { $set: roles });
+  const gameObj = toPlainGameObj(game);
+  Object.assign(gameObj, roles);
 
-    const cachedObject = cachedGame.toObject
-      ? cachedGame.toObject()
-      : cachedGame;
-    const updatedGame = { ...cachedObject, ...roles };
-    gameCache.set(id, updatedGame);
+  gameCache.set(id, gameObj);
+  markGameDirty(id);
 
-    return updatedGame;
-  }
-
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    { $set: roles },
-    { new: true, uesFindAndModify: false }
-  );
-
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
-  }
-
-  return updatedGame;
+  return gameObj;
 };
 
 // creatingTime is intentionally excluded — it must never change after creation
 export const restartGame = async (id: string) => {
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    { $set: initialGame },
-    { new: true, uesFindAndModify: false }
-  );
+  const game = await getGame(id);
+  if (!game) return null;
 
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
-  }
+  const gameObj = toPlainGameObj(game);
 
-  return updatedGame;
+  Object.assign(gameObj, initialGame);
+  gameObj.gameFlow = JSON.parse(JSON.stringify(initialGameFlow));
+
+  gameCache.set(id, gameObj);
+  forceSaveGame(id);
+
+  return gameObj;
 };
 
 export const startGame = async (id: string) => {
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    {
-      $set: {
-        isActive: true,
-        startTime: new Date(),
-        'gameFlow.isStarted': true,
-        'gameFlow.day': 1,
-      },
-    },
-    { new: true, uesFindAndModify: false }
-  );
+  const game = await getGame(id);
+  if (!game) return null;
 
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
-  }
+  const gameObj = toPlainGameObj(game);
 
-  return updatedGame;
+  gameObj.isActive = true;
+  gameObj.startTime = Date.now();
+  gameObj.gameFlow.isStarted = true;
+  gameObj.gameFlow.day = 1;
+
+  gameCache.set(id, gameObj);
+  forceSaveGame(id);
+
+  return gameObj;
 };
 
 export const startDay = async (id: string) => {
-  const game = await Games.findById(id);
-  const block = game?.gameFlow.prostituteBlock || '';
-  const save = game?.gameFlow.doctorSave || '';
+  const game = await getGame(id);
+  if (!game) return null;
+
+  const gameObj = toPlainGameObj(game);
+  const block = gameObj.gameFlow?.prostituteBlock || '';
+  const save = gameObj.gameFlow?.doctorSave || '';
 
   const newProstituteBlock = block === save && block !== '' ? '' : block;
 
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    {
-      $set: {
-        'gameFlow.isNight': false,
-        'gameFlow.prostituteBlock': newProstituteBlock,
-        ...resetDayNightFlow,
-      },
-      $inc: {
-        'gameFlow.day': 1,
-      },
-    },
-    { new: true, uesFindAndModify: false }
-  );
+  // Оновлюємо in-memory
+  gameObj.gameFlow.isNight = false;
+  gameObj.gameFlow.prostituteBlock = newProstituteBlock;
+  gameObj.gameFlow.day = (gameObj.gameFlow.day || 0) + 1;
 
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
-  }
+  // Manual resetDayNightFlow mapping
+  gameObj.gameFlow.speaker = '';
+  gameObj.gameFlow.proposed = [];
+  gameObj.gameFlow.shoot = {};
+  gameObj.gameFlow.voted = {};
+  gameObj.gameFlow.isVote = false;
+  gameObj.gameFlow.isReVote = false;
+  gameObj.gameFlow.isExtraSpeech = false;
+  gameObj.gameFlow.wakeUp = '';
+  gameObj.gameFlow.sheriffCheck = '';
+  gameObj.gameFlow.donCheck = '';
 
-  return updatedGame;
+  gameCache.set(id, gameObj);
+  forceSaveGame(id);
+
+  return gameObj;
 };
 
 export const startNight = async (id: string) => {
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    {
-      $set: {
-        'gameFlow.isNight': true,
-        'gameFlow.prostituteBlock': '',
-        'gameFlow.doctorSave': '',
-        ...resetDayNightFlow,
-      },
-    },
-    { new: true, uesFindAndModify: false }
-  );
+  const game = await getGame(id);
+  if (!game) return null;
 
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
-  }
+  const gameObj = toPlainGameObj(game);
 
-  return updatedGame;
+  gameObj.gameFlow.isNight = true;
+  gameObj.gameFlow.prostituteBlock = '';
+  gameObj.gameFlow.doctorSave = '';
+
+  // Manual resetDayNightFlow mapping
+  gameObj.gameFlow.speaker = '';
+  gameObj.gameFlow.proposed = [];
+  gameObj.gameFlow.shoot = {};
+  gameObj.gameFlow.voted = {};
+  gameObj.gameFlow.isVote = false;
+  gameObj.gameFlow.isReVote = false;
+  gameObj.gameFlow.isExtraSpeech = false;
+  gameObj.gameFlow.wakeUp = '';
+  gameObj.gameFlow.sheriffCheck = '';
+  gameObj.gameFlow.donCheck = '';
+
+  gameCache.set(id, gameObj);
+  forceSaveGame(id);
+
+  return gameObj;
 };
 
 export const addUserToProposed = async (id: string, userId: string) => {
-  const game = await Games.findById(id);
+  const game = await getGame(id);
 
   if (!game) {
     console.error(`[addUserToProposed] Game with id ${id} not found`);
     throw new Error(`Game with id ${id} not found`);
   }
 
-  console.log(
-    `[addUserToProposed] Current proposed:`,
-    game.gameFlow.proposed,
-    `(count: ${game.gameFlow.proposed.length})`
-  );
+  const gameObj = toPlainGameObj(game);
 
-  if (game.gameFlow.proposed.includes(userId)) {
+  if (gameObj.gameFlow.proposed.includes(userId)) {
     console.log(`[addUserToProposed] User ${userId} already in proposed list`);
-    return game;
+    return gameObj;
   }
 
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    { $addToSet: { 'gameFlow.proposed': userId } },
-    { new: true }
-  );
+  // Оновлюємо кеш миттєво
+  gameObj.gameFlow.proposed.push(userId);
+  gameCache.set(id, gameObj);
+  markGameDirty(id);
 
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
-    console.log(
-      `[addUserToProposed] Successfully added user ${userId}`,
-      `(total: ${updatedGame.gameFlow.proposed.length})`
-    );
-  }
-
-  return updatedGame;
+  return gameObj;
 };
 
 export const addVote = async (
@@ -319,17 +378,21 @@ export const addVote = async (
   targetUserId: string,
   voterId: string
 ) => {
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    { $addToSet: { [`gameFlow.voted.${targetUserId}`]: voterId } },
-    { new: true }
-  );
+  const game = await getGame(id);
+  if (!game) return null;
 
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
+  const gameObj = toPlainGameObj(game);
+  if (!gameObj.gameFlow.voted) gameObj.gameFlow.voted = {};
+  if (!gameObj.gameFlow.voted[targetUserId]) gameObj.gameFlow.voted[targetUserId] = [];
+
+  if (!gameObj.gameFlow.voted[targetUserId].includes(voterId)) {
+    // Оновлюємо кеш
+    gameObj.gameFlow.voted[targetUserId].push(voterId);
+    gameCache.set(id, gameObj);
+    markGameDirty(id);
   }
 
-  return updatedGame;
+  return gameObj;
 };
 
 export const addShoot = async (
@@ -338,24 +401,25 @@ export const addShoot = async (
   shooterId: string,
   shot?: { x: number; y: number }
 ) => {
+  const game = await getGame(id);
+  if (!game) return null;
+
   const defaultShot = { x: 50, y: 50 };
+  const actualShot = shot ?? defaultShot;
 
-  const updatedGame = await Games.findOneAndUpdate(
-    { _id: id },
-    {
-      $push: {
-        [`gameFlow.shoot.${targetUserId}.shooters`]: shooterId,
-        [`gameFlow.shoot.${targetUserId}.shots`]: shot ?? defaultShot,
-      },
-    },
-    { new: true }
-  );
-
-  if (updatedGame) {
-    gameCache.set(id, updatedGame);
+  const gameObj = toPlainGameObj(game);
+  if (!gameObj.gameFlow.shoot) gameObj.gameFlow.shoot = {};
+  if (!gameObj.gameFlow.shoot[targetUserId]) {
+    gameObj.gameFlow.shoot[targetUserId] = { shooters: [], shots: [] };
   }
 
-  return updatedGame;
+  // Оновлюємо кеш
+  gameObj.gameFlow.shoot[targetUserId].shooters.push(shooterId);
+  gameObj.gameFlow.shoot[targetUserId].shots.push(actualShot);
+  gameCache.set(id, gameObj);
+  markGameDirty(id);
+
+  return gameObj;
 };
 
 export const findGameByPlayerId = async (playerId: string) =>

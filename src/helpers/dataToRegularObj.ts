@@ -1,7 +1,10 @@
 import { isMongooseDocument } from './isMongooseDocument';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 type Data = Document | Record<string, any>;
+
+const isObjectId = (val: any): val is Types.ObjectId =>
+  val instanceof Types.ObjectId || val?._bsontype === 'ObjectId';
 
 export const dataToRegularObj = (data: Data | Data[]) => {
   const recursiveObjectCheck = (obj: Record<string, any>) => {
@@ -10,15 +13,17 @@ export const dataToRegularObj = (data: Data | Data[]) => {
     Object.entries(obj).forEach(([key, value]) => {
       if (Array.isArray(value)) {
         newObj[key] = value.map((val) => {
-          if (isMongooseDocument(val)) {
-            return val.toObject();
-          }
-          if (typeof val === 'object' && val !== null) {
-            return recursiveObjectCheck(val);
-          }
+          if (isObjectId(val)) return val.toString();
+          if (isMongooseDocument(val)) return val.toObject();
+          if (typeof val === 'object' && val !== null) return recursiveObjectCheck(val);
           return val;
         });
 
+        return;
+      }
+
+      if (isObjectId(value)) {
+        newObj[key] = value.toString();
         return;
       }
 

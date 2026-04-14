@@ -48,5 +48,6 @@ class SimpleCache<T> {
   }
 }
 
-export const gameCache = new SimpleCache<any>(3);
+// TTL must exceed the Write-Behind flush interval (15s) to prevent stale reads from DB
+export const gameCache = new SimpleCache<any>(30);
 

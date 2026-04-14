@@ -1,7 +1,7 @@
 import { IGame, IGameShort } from '../subjects/games/gamesTypes';
 
 export const createGamesShortData = (game: IGame): IGameShort => ({
-  id: game.id,
+  id: game.id ?? (game as any)._id?.toString(),
   owner: game.owner,
   playersCount: game.players.length,
   isPrivate: game.isPrivate,

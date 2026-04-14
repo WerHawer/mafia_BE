@@ -178,10 +178,11 @@ export const addUserToGame = async (
       `[addUserToGame Controller] Successfully added user ${userId} to game ${id}`
     );
 
-    res
-      .sendResponse(game)
-      .io.to(id)
-      .emit(wsEvents.gameUpdate, dataNormalize(game));
+    const normalizedGame = dataNormalize(game);
+    const io = res.sendResponse(game).io;
+
+    io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
+    io.emit(wsEvents.gamesUpdate, dataNormalize(createGamesShortData(game)));
   } catch (error) {
     console.error(`[addUserToGame Controller] Error:`, error);
     next(error);
@@ -215,12 +216,11 @@ export const removeUserFromGame = async (
     }
 
     const userSocketId = userSocketMap.get(userId);
+    const normalizedGame = dataNormalize(game);
+    const io = res.sendResponse(normalizedGame).io;
 
-    res
-      .sendResponse(dataNormalize(game))
-      .io.to(id)
-      .except(userSocketId)
-      .emit(wsEvents.gameUpdate, dataNormalize(game));
+    io.to(id).except(userSocketId).emit(wsEvents.gameUpdate, normalizedGame);
+    io.emit(wsEvents.gamesUpdate, dataNormalize(createGamesShortData(game)));
   } catch (error) {
     next(error);
   }
