@@ -182,6 +182,12 @@ export const addUserToGame = async (
     const io = res.sendResponse(game).io;
 
     io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
+    // Broadcast to all clients so the home page game list stays in sync
+    io.emit(wsEvents.roomConnection, {
+      userId,
+      roomId: id,
+      game: dataNormalize(createGamesShortData(game)),
+    });
     io.emit(wsEvents.gamesUpdate, dataNormalize(createGamesShortData(game)));
   } catch (error) {
     console.error(`[addUserToGame Controller] Error:`, error);
@@ -215,11 +221,20 @@ export const removeUserFromGame = async (
       game = await gamesService.updateGame(id, { isActive: false });
     }
 
-    const userSocketId = userSocketMap.get(userId);
     const normalizedGame = dataNormalize(game);
     const io = res.sendResponse(normalizedGame).io;
 
-    io.to(id).except(userSocketId).emit(wsEvents.gameUpdate, normalizedGame);
+    // Emit gameUpdate to everyone in the room including the leaving player,
+    // so they also receive the updated player count while still on the game page.
+    io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
+    // Broadcast roomLeave with the authoritative updated game data so the home
+    // page game list reflects the correct player count immediately — this is
+    // the definitive event since the cache is already updated at this point.
+    io.emit(wsEvents.roomLeave, {
+      userId,
+      roomId: id,
+      game: dataNormalize(createGamesShortData(game)),
+    });
     io.emit(wsEvents.gamesUpdate, dataNormalize(createGamesShortData(game)));
   } catch (error) {
     next(error);

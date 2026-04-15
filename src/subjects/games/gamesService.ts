@@ -216,7 +216,8 @@ export const addGamePlayers = async (id: string, playerId: string) => {
   if (!gameObj.players.includes(playerId)) {
     gameObj.players.push(playerId);
     gameCache.set(id, gameObj);
-    markGameDirty(id);
+    // Player join is a key event — force immediate DB sync instead of waiting for the aggregator
+    forceSaveGame(id);
   }
 
   console.log(`[addGamePlayers] Current players: (count: ${gameObj.players.length})`);
@@ -234,7 +235,8 @@ export const removeGamePlayers = async (id: string, playerId: string) => {
   if (index > -1) {
     gameObj.players.splice(index, 1);
     gameCache.set(id, gameObj);
-    markGameDirty(id);
+    // Player leave is a key event — force immediate DB sync instead of waiting for the aggregator
+    forceSaveGame(id);
     console.log(`[removeGamePlayers] Successfully removed player ${playerId} (left: ${gameObj.players.length})`);
   } else {
     console.error(`[removeGamePlayers] Failed to find player ${playerId} in game ${id}`);

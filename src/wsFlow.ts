@@ -184,6 +184,14 @@ export const wsFlow = (io: Server) => {
       const game = await gamesService.getGame(roomId);
       const shortGame = createGamesShortData(game);
 
+      // The HTTP call to add the player may not have completed yet —
+      // ensure the joining player is reflected in the count regardless.
+      const players = (game?.players as string[]) ?? [];
+      const alreadyInGame = players.some((p: string) => p.toString() === userId);
+      if (!alreadyInGame) {
+        shortGame.playersCount = players.length + 1;
+      }
+
       io.emit(wsEvents.roomConnection, { userId, roomId, game: shortGame });
 
       console.log(`User ${userId} joined room ${roomId}`);
@@ -194,6 +202,14 @@ export const wsFlow = (io: Server) => {
 
       const game = await gamesService.getGame(roomId);
       const shortGame = createGamesShortData(game);
+
+      // The HTTP call to remove the player may not have completed yet —
+      // ensure the leaving player is excluded from the count regardless.
+      const players = (game?.players as string[]) ?? [];
+      const stillInGame = players.some((p: string) => p.toString() === userId);
+      if (stillInGame) {
+        shortGame.playersCount = Math.max(0, players.length - 1);
+      }
 
       io.emit(wsEvents.roomLeave, { userId, roomId, game: shortGame });
 
