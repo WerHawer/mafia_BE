@@ -181,6 +181,12 @@ export const wsFlow = (io: Server) => {
     socket.on(wsEvents.roomConnection, async ([roomId, userId]) => {
       socket.join(roomId);
 
+      // Dead chat rooms use a composite id (gameId_dead) — skip game lookup
+      if (roomId.endsWith('_dead')) {
+        console.log(`User ${userId} joined dead room ${roomId}`);
+        return;
+      }
+
       const game = await gamesService.getGame(roomId);
       const shortGame = createGamesShortData(game);
 
@@ -199,6 +205,12 @@ export const wsFlow = (io: Server) => {
 
     socket.on(wsEvents.roomLeave, async ([roomId, userId]) => {
       socket.leave(roomId);
+
+      // Dead chat rooms use a composite id (gameId_dead) — skip game lookup
+      if (roomId.endsWith('_dead')) {
+        console.log(`User ${userId} left dead room ${roomId}`);
+        return;
+      }
 
       const game = await gamesService.getGame(roomId);
       const shortGame = createGamesShortData(game);
@@ -250,8 +262,11 @@ export const wsFlow = (io: Server) => {
         const roomId = message.to.id.replace('_dead', '');
         const game = await gamesService.getGame(roomId);
 
-        if (!game?.gameFlow?.killed?.includes(message.sender)) {
-          console.log(`[Chat Block] User ${message.sender} tried to post in dead chat ${message.to.id} but is not dead.`);
+        const isKilled = game?.gameFlow?.killed?.includes(message.sender);
+        const isGM = game?.gm === message.sender;
+
+        if (!isKilled && !isGM) {
+          console.log(`[Chat Block] User ${message.sender} tried to post in dead chat ${message.to.id} but is not dead or GM.`);
           return;
         }
       }
