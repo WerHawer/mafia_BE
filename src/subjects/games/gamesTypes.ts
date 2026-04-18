@@ -25,6 +25,7 @@ export interface IGameFlow {
   doctorSave?: string;
   donCheck?: string;
   prostituteBlock?: string;
+  sleeping: string[];
 }
 
 export interface IGame {

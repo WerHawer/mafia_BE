@@ -10,7 +10,9 @@ import { gameCache } from '../../helpers/cache';
  * This is critical because `toObject()` keeps ObjectIds as-is, which breaks string comparisons.
  */
 const toPlainGameObj = (game: any): any => {
-  const obj: Record<string, any> = game.toObject ? game.toObject() : { ...game };
+  const obj: Record<string, any> = game.toObject
+    ? game.toObject()
+    : { ...game };
 
   if (!obj.id && obj._id) {
     obj.id = obj._id.toString();
@@ -52,7 +54,9 @@ setInterval(async () => {
     });
 
     await Promise.allSettled(promises);
-    console.log(`[DB Write-Behind Flush] Aggregated and saved ${gamesToSave.length} games to MongoDB in ${Date.now() - startDb}ms`);
+    console.log(
+      `[DB Write-Behind Flush] Aggregated and saved ${gamesToSave.length} games to MongoDB in ${Date.now() - startDb}ms`
+    );
   } catch (error) {
     console.error('[DB Write-Behind Flush] Error:', error);
   }
@@ -69,8 +73,12 @@ export const forceSaveGame = (id: string) => {
   const startDb = Date.now();
   Games.updateOne({ _id: id }, { $set: copy })
     .exec()
-    .then(() => console.log(`[DB Force Save] Game ${id} saved instantly in ${Date.now() - startDb}ms`))
-    .catch(e => console.error('[DB Force Save Error]:', e));
+    .then(() =>
+      console.log(
+        `[DB Force Save] Game ${id} saved instantly in ${Date.now() - startDb}ms`
+      )
+    )
+    .catch((e) => console.error('[DB Force Save Error]:', e));
 };
 // ------------------------------------------------
 
@@ -100,6 +108,7 @@ const initialGameFlow = {
   shoot: {},
   killed: [],
   wakeUp: [],
+  sleeping: [],
 };
 
 // Base reset state — does NOT include creatingTime (set only at game creation)
@@ -220,7 +229,9 @@ export const addGamePlayers = async (id: string, playerId: string) => {
     forceSaveGame(id);
   }
 
-  console.log(`[addGamePlayers] Current players: (count: ${gameObj.players.length})`);
+  console.log(
+    `[addGamePlayers] Current players: (count: ${gameObj.players.length})`
+  );
 
   return gameObj;
 };
@@ -237,9 +248,13 @@ export const removeGamePlayers = async (id: string, playerId: string) => {
     gameCache.set(id, gameObj);
     // Player leave is a key event — force immediate DB sync instead of waiting for the aggregator
     forceSaveGame(id);
-    console.log(`[removeGamePlayers] Successfully removed player ${playerId} (left: ${gameObj.players.length})`);
+    console.log(
+      `[removeGamePlayers] Successfully removed player ${playerId} (left: ${gameObj.players.length})`
+    );
   } else {
-    console.error(`[removeGamePlayers] Failed to find player ${playerId} in game ${id}`);
+    console.error(
+      `[removeGamePlayers] Failed to find player ${playerId} in game ${id}`
+    );
   }
 
   return gameObj;
@@ -317,6 +332,7 @@ export const startDay = async (id: string) => {
   gameObj.gameFlow.wakeUp = '';
   gameObj.gameFlow.sheriffCheck = '';
   gameObj.gameFlow.donCheck = '';
+  gameObj.gameFlow.sleeping = [];
 
   gameCache.set(id, gameObj);
   forceSaveGame(id);
@@ -345,6 +361,7 @@ export const startNight = async (id: string) => {
   gameObj.gameFlow.wakeUp = '';
   gameObj.gameFlow.sheriffCheck = '';
   gameObj.gameFlow.donCheck = '';
+  gameObj.gameFlow.sleeping = [];
 
   gameCache.set(id, gameObj);
   forceSaveGame(id);
@@ -385,7 +402,8 @@ export const addVote = async (
 
   const gameObj = toPlainGameObj(game);
   if (!gameObj.gameFlow.voted) gameObj.gameFlow.voted = {};
-  if (!gameObj.gameFlow.voted[targetUserId]) gameObj.gameFlow.voted[targetUserId] = [];
+  if (!gameObj.gameFlow.voted[targetUserId])
+    gameObj.gameFlow.voted[targetUserId] = [];
 
   if (!gameObj.gameFlow.voted[targetUserId].includes(voterId)) {
     // Оновлюємо кеш
@@ -426,3 +444,35 @@ export const addShoot = async (
 
 export const findGameByPlayerId = async (playerId: string) =>
   Games.findOne({ players: playerId });
+
+/**
+ * Adds or removes a userId from the sleeping array in gameFlow.
+ * @param add - true to add (player confirmed sleep), false to remove (player woke up)
+ */
+export const updateSleeping = async (
+  id: string,
+  userId: string,
+  add: boolean
+) => {
+  const game = await getGame(id);
+  if (!game) return null;
+
+  const gameObj = toPlainGameObj(game);
+  if (!gameObj.gameFlow.sleeping) gameObj.gameFlow.sleeping = [];
+
+  const alreadySleeping = gameObj.gameFlow.sleeping.includes(userId);
+
+  if (add && !alreadySleeping) {
+    gameObj.gameFlow.sleeping.push(userId);
+    gameCache.set(id, gameObj);
+    markGameDirty(id);
+  } else if (!add && alreadySleeping) {
+    gameObj.gameFlow.sleeping = gameObj.gameFlow.sleeping.filter(
+      (uid: string) => uid !== userId
+    );
+    gameCache.set(id, gameObj);
+    markGameDirty(id);
+  }
+
+  return gameObj;
+};

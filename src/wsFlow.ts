@@ -41,6 +41,13 @@ export enum wsEvents {
   userMicrophoneStatusChanged = 'userMicrophoneStatusChanged',
   batchToggleMicrophones = 'batchToggleMicrophones',
   batchToggleCameras = 'batchToggleCameras',
+  playerSleepConfirm = 'playerSleepConfirm',
+  playerSleepAck = 'playerSleepAck',
+  playerWakeConfirm = 'playerWakeConfirm',
+  playerWakeAck = 'playerWakeAck',
+  manualSleep = 'manualSleep',
+  manualWake = 'manualWake',
+  peerDisconnect = 'peerDisconnect',
 }
 
 export const userSocketMap = new Map<string, string>();
