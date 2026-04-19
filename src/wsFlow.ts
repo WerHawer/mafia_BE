@@ -7,6 +7,7 @@ import { socketEventsGameFlow } from './socketFlows/socketEventsGameFlow';
 import * as gamesService from './subjects/games/gamesService';
 import { createGamesShortData } from './helpers/createGamesShortData';
 import * as usersService from './subjects/users/usersService';
+import { getUserById } from './subjects/users/usersService';
 
 export enum OffParams {
   Other = 'other',
@@ -48,6 +49,7 @@ export enum wsEvents {
   manualSleep = 'manualSleep',
   manualWake = 'manualWake',
   peerDisconnect = 'peerDisconnect',
+  gameReaction = 'gameReaction',
 }
 
 export const userSocketMap = new Map<string, string>();
@@ -68,7 +70,9 @@ const handlePlayerDisconnectTimeout = async (
     // Safety check: if the user reconnected before the timer fired, abort removal.
     // This prevents a race condition where the timer fires just after a new connection arrives.
     if (userSocketMap.has(userId)) {
-      console.log(`[Disconnect] User ${userId} already reconnected — skipping game removal`);
+      console.log(
+        `[Disconnect] User ${userId} already reconnected — skipping game removal`
+      );
       return;
     }
 
@@ -86,7 +90,9 @@ const handlePlayerDisconnectTimeout = async (
     let updatedGame = await gamesService.removeGamePlayers(gameId, userId);
 
     if (!updatedGame) {
-      console.error(`[Disconnect] Failed to remove user ${userId} from game ${gameId}`);
+      console.error(
+        `[Disconnect] Failed to remove user ${userId} from game ${gameId}`
+      );
       return;
     }
 
@@ -105,9 +111,14 @@ const handlePlayerDisconnectTimeout = async (
       game: createGamesShortData(updatedGame),
     });
 
-    console.log(`[Disconnect] Removed user ${userId} from game ${gameId} after ${GRACEFUL_RECONNECT_TIMEOUT_MS / 1000}s graceful timeout`);
+    console.log(
+      `[Disconnect] Removed user ${userId} from game ${gameId} after ${GRACEFUL_RECONNECT_TIMEOUT_MS / 1000}s graceful timeout`
+    );
   } catch (error) {
-    console.error(`[Disconnect] Error handling disconnect for user ${userId}:`, error);
+    console.error(
+      `[Disconnect] Error handling disconnect for user ${userId}:`,
+      error
+    );
   }
 };
 
@@ -142,7 +153,9 @@ export const wsFlow = (io: Server) => {
       if (pendingTimer) {
         clearTimeout(pendingTimer);
         disconnectTimers.delete(userId);
-        console.log(`[Reconnect] Cancelled pending disconnect timer for user ${userId}`);
+        console.log(
+          `[Reconnect] Cancelled pending disconnect timer for user ${userId}`
+        );
       }
 
       // Mark user as online again in case the timer had already fired
@@ -200,7 +213,9 @@ export const wsFlow = (io: Server) => {
       // The HTTP call to add the player may not have completed yet —
       // ensure the joining player is reflected in the count regardless.
       const players = (game?.players as string[]) ?? [];
-      const alreadyInGame = players.some((p: string) => p.toString() === userId);
+      const alreadyInGame = players.some(
+        (p: string) => p.toString() === userId
+      );
       if (!alreadyInGame) {
         shortGame.playersCount = players.length + 1;
       }
@@ -237,12 +252,16 @@ export const wsFlow = (io: Server) => {
 
     socket.on(wsEvents.messageSend, async (message) => {
       if (!message?.to) {
-        console.error('[Chat Error] Invalid message format - missing "to" property');
+        console.error(
+          '[Chat Error] Invalid message format - missing "to" property'
+        );
         return;
       }
 
       if (!message.to.type) {
-        console.error('[Chat Error] Invalid message format - missing "to.type" property');
+        console.error(
+          '[Chat Error] Invalid message format - missing "to.type" property'
+        );
         return;
       }
 
@@ -259,7 +278,9 @@ export const wsFlow = (io: Server) => {
 
       // For room-based chats, we need to.id
       if (!message.to.id) {
-        console.error('[Chat Error] Invalid message format - missing "to.id" property for room-based chat');
+        console.error(
+          '[Chat Error] Invalid message format - missing "to.id" property for room-based chat'
+        );
         return;
       }
 
@@ -273,7 +294,9 @@ export const wsFlow = (io: Server) => {
         const isGM = game?.gm === message.sender;
 
         if (!isKilled && !isGM) {
-          console.log(`[Chat Block] User ${message.sender} tried to post in dead chat ${message.to.id} but is not dead or GM.`);
+          console.log(
+            `[Chat Block] User ${message.sender} tried to post in dead chat ${message.to.id} but is not dead or GM.`
+          );
           return;
         }
       }
@@ -282,7 +305,6 @@ export const wsFlow = (io: Server) => {
       await savedMessage.populate(messagesPopulate);
       const event = wsEvents.messageSend;
       const data = dataNormalize(savedMessage);
-
 
       io.to(message.to.id).emit(event, data);
     });
@@ -314,7 +336,9 @@ export const wsFlow = (io: Server) => {
         (socket.data.userId as string | undefined) ??
         (socket.handshake.auth.userId as string | undefined);
 
-      console.log(`[Disconnect] Socket ${socket.id} disconnected. Reason: ${reason}. UserId: ${disconnectedUserId ?? 'unknown'}`);
+      console.log(
+        `[Disconnect] Socket ${socket.id} disconnected. Reason: ${reason}. UserId: ${disconnectedUserId ?? 'unknown'}`
+      );
 
       if (disconnectedUserId) {
         userSocketMap.delete(disconnectedUserId);
@@ -332,7 +356,9 @@ export const wsFlow = (io: Server) => {
           `[Disconnect] Started ${GRACEFUL_RECONNECT_TIMEOUT_MS / 1000}s grace timer for user ${disconnectedUserId}`
         );
       } else {
-        console.warn(`[Disconnect] Socket ${socket.id} disconnected without a userId — game cleanup skipped`);
+        console.warn(
+          `[Disconnect] Socket ${socket.id} disconnected without a userId — game cleanup skipped`
+        );
       }
 
       // Emit updated connected-user count immediately — socket count is already decremented
@@ -751,6 +777,30 @@ export const wsFlow = (io: Server) => {
             details: error instanceof Error ? error.message : String(error),
           });
         }
+      }
+    );
+
+    socket.on(
+      wsEvents.gameReaction,
+      async ({
+        gameId,
+        userId,
+        emoji,
+      }: {
+        gameId: string;
+        userId: string;
+        emoji: string;
+      }) => {
+        let userName = userId;
+
+        try {
+          const user = await usersService.getUserById(userId);
+          if (user?.nikName) userName = user.nikName;
+        } catch {
+          // fall back to userId
+        }
+
+        io.to(gameId).emit(wsEvents.gameReaction, { userId, userName, emoji });
       }
     );
 
