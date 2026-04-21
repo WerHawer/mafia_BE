@@ -20,6 +20,7 @@ const usersSchema = new Schema<IUser>({
   isOnline: { type: Boolean, required: true },
   avatar: { type: [Types.ObjectId], ref: DBSubject.Avatars },
   password: String,
+  refreshToken: String,
 });
 
 export const Users = model(DBSubject.Users, usersSchema);

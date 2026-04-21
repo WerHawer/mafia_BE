@@ -22,6 +22,8 @@ import { responseErrorMiddleware } from './middlewares/responseErrorMiddleware';
 import loginRouter from './routes/loginRouter';
 import { auth } from './middlewares/auth';
 import registrationRouter from './routes/registrationRouter';
+import refreshRouter from './routes/refreshRouter';
+import logoutRouter from './routes/logoutRouter';
 import { slowQueryLogger } from './middlewares/slowQueryLogger';
 
 dotenv.config();
@@ -68,6 +70,8 @@ app.use(responseWithIo(io));
 app.use('/livekit', livekitRouter);
 app.use('/login', loginRouter);
 app.use('/signUp', registrationRouter);
+app.use('/refresh', refreshRouter);
+app.use('/logout', logoutRouter);
 
 app.use(auth);
 app.get('/auth', (req, res) => {

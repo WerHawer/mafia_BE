@@ -10,7 +10,10 @@ import {
 import { Populate } from '../DBTypes';
 import { IUserAvatar } from './usersTypes';
 import { createToken } from '../../helpers/createToken';
+import { createRefreshToken } from '../../helpers/createRefreshToken';
 import { comparePassword } from '../../helpers/comparePassword';
+import jwt from 'jsonwebtoken';
+import { getSecret } from '../../helpers/getSecret';
 import * as messagesService from '../messages/messagesService';
 import { wsEvents } from '../../wsFlow';
 import { dataNormalize } from '../../helpers/dataNormalize';
@@ -116,8 +119,11 @@ export const createUser = async (
     const { id, nikName } = user;
 
     const token = createToken({ id, nikName });
+    const refreshToken = createRefreshToken({ id, nikName });
 
-    res.sendResponse({ user, token }, 201);
+    await userService.updateUser(`${id}`, { refreshToken });
+
+    res.sendResponse({ user, token, refreshToken }, 201);
   } catch (error) {
     next(error);
   }
@@ -147,8 +153,55 @@ export const loginUser = async (req: Request, res: Response) => {
 
   const { id, nikName } = user;
   const token = createToken({ id, nikName });
+  const refreshToken = createRefreshToken({ id, nikName });
 
-  res.sendResponse({ user, token });
+  await userService.updateUser(`${id}`, { refreshToken });
+
+  res.sendResponse({ user, token, refreshToken });
+};
+
+export const refreshUserToken = async (req: Request, res: Response, next: NextFunction) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.sendError({ message: 'Refresh token is required', status: 401 });
+  }
+
+  try {
+    const secret = getSecret();
+    let payload;
+    try {
+      payload = jwt.verify(refreshToken, secret) as any;
+    } catch(err) {
+      return res.sendError({ message: 'Invalid refresh token', status: 403 });
+    }
+
+    const user = await userService.getUserById(payload.id);
+    if (!user || user.refreshToken !== refreshToken) {
+      return res.sendError({ message: 'Invalid refresh token', status: 403 });
+    }
+
+    const { id, nikName } = user;
+    const newToken = createToken({ id, nikName });
+    const newRefreshToken = createRefreshToken({ id, nikName });
+
+    await userService.updateUser(`${id}`, { refreshToken: newRefreshToken });
+
+    res.sendResponse({ token: newToken, refreshToken: newRefreshToken });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const logoutUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.user as any;
+    
+    await userService.updateUser(`${id}`, { refreshToken: '' });
+    res.sendResponse({ message: 'Logged out successfully' });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const updateUser = async (

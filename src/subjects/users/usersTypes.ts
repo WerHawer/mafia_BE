@@ -6,6 +6,7 @@ export interface IUser {
   isOnline: boolean;
   avatar?: IUserAvatar[] | Types.ObjectId[];
   password?: string;
+  refreshToken?: string;
   // history: [],
 }
 

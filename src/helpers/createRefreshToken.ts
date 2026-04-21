@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 
 const secret = getSecret();
 
-export const createToken = (payload: {
+export const createRefreshToken = (payload: {
   id: Types.ObjectId;
   nikName: string;
-}): string => jwt.sign(payload, secret, { expiresIn: '1h' });
+}): string => jwt.sign(payload, secret, { expiresIn: '7d' });
