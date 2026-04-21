@@ -212,53 +212,88 @@ export const verifyGamePassword = async (
   return game.password === password;
 };
 
-export const addGamePlayers = async (id: string, playerId: string) => {
-  const game = await getGame(id);
+// Per-game serialization map — ensures concurrent addGamePlayers / removeGamePlayers
+// calls for the same game are processed sequentially.
+// This prevents the Last-Write-Wins race condition where simultaneous reads return
+// the same stale snapshot and each writer only appends their own player, so the last
+// write wins and earlier players are lost from the cache.
+//
+// NOTE: This is a single-process in-memory lock and is sufficient for a single-server
+// deployment. For multi-process / multi-instance setups, use a Redis-based lock or
+// MongoDB's $addToSet atomic operator instead.
+const gameLocks = new Map<string, Promise<void>>();
 
-  if (!game) {
-    console.error(`[addGamePlayers] Game with id ${id} not found`);
-    throw new Error(`Game with id ${id} not found`);
-  }
+/**
+ * Executes `fn` exclusively for the given gameId — any concurrent call will
+ * wait for the current execution to finish before starting.
+ */
+const withGameLock = <T>(gameId: string, fn: () => Promise<T>): Promise<T> => {
+  const prev = gameLocks.get(gameId) ?? Promise.resolve();
 
-  const gameObj = toPlainGameObj(game);
-
-  if (!gameObj.players.includes(playerId)) {
-    gameObj.players.push(playerId);
-    gameCache.set(id, gameObj);
-    // Player join is a key event — force immediate DB sync instead of waiting for the aggregator
-    forceSaveGame(id);
-  }
-
-  console.log(
-    `[addGamePlayers] Current players: (count: ${gameObj.players.length})`
+  // Chain fn onto the previous promise so it runs only after the previous call finishes.
+  // The outer .then(() => {}, () => {}) strips the return value so the lock entry stays
+  // a Promise<void> regardless of what fn returns or throws.
+  const current = prev.then(fn);
+  gameLocks.set(
+    gameId,
+    current.then(
+      () => {},
+      () => {}
+    )
   );
 
-  return gameObj;
+  return current;
 };
 
-export const removeGamePlayers = async (id: string, playerId: string) => {
-  const game = await getGame(id);
-  if (!game) return null;
+export const addGamePlayers = (id: string, playerId: string) =>
+  withGameLock(id, async () => {
+    const game = await getGame(id);
 
-  const gameObj = toPlainGameObj(game);
-  const index = gameObj.players.indexOf(playerId);
+    if (!game) {
+      console.error(`[addGamePlayers] Game with id ${id} not found`);
+      throw new Error(`Game with id ${id} not found`);
+    }
 
-  if (index > -1) {
-    gameObj.players.splice(index, 1);
-    gameCache.set(id, gameObj);
-    // Player leave is a key event — force immediate DB sync instead of waiting for the aggregator
-    forceSaveGame(id);
+    const gameObj = toPlainGameObj(game);
+
+    if (!gameObj.players.includes(playerId)) {
+      gameObj.players.push(playerId);
+      gameCache.set(id, gameObj);
+      // Player join is a key event — force immediate DB sync instead of waiting for the aggregator
+      forceSaveGame(id);
+    }
+
     console.log(
-      `[removeGamePlayers] Successfully removed player ${playerId} (left: ${gameObj.players.length})`
+      `[addGamePlayers] Current players: (count: ${gameObj.players.length})`
     );
-  } else {
-    console.error(
-      `[removeGamePlayers] Failed to find player ${playerId} in game ${id}`
-    );
-  }
 
-  return gameObj;
-};
+    return gameObj;
+  });
+
+export const removeGamePlayers = (id: string, playerId: string) =>
+  withGameLock(id, async () => {
+    const game = await getGame(id);
+    if (!game) return null;
+
+    const gameObj = toPlainGameObj(game);
+    const index = gameObj.players.indexOf(playerId);
+
+    if (index > -1) {
+      gameObj.players.splice(index, 1);
+      gameCache.set(id, gameObj);
+      // Player leave is a key event — force immediate DB sync instead of waiting for the aggregator
+      forceSaveGame(id);
+      console.log(
+        `[removeGamePlayers] Successfully removed player ${playerId} (left: ${gameObj.players.length})`
+      );
+    } else {
+      console.error(
+        `[removeGamePlayers] Failed to find player ${playerId} in game ${id}`
+      );
+    }
+
+    return gameObj;
+  });
 
 export const addGameRoles = async (id: string, roles: Partial<IGame>) => {
   const game = await getGame(id);

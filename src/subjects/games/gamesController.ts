@@ -107,7 +107,9 @@ export const updateGame = async (
         const targetSocket = io.sockets.sockets.get(socketId);
         if (targetSocket && !targetSocket.rooms.has(deadRoom)) {
           targetSocket.join(deadRoom);
-          console.log(`[DeadChat] User ${killedUserId} joined dead room ${deadRoom}`);
+          console.log(
+            `[DeadChat] User ${killedUserId} joined dead room ${deadRoom}`
+          );
         }
       }
     }
@@ -305,7 +307,9 @@ export const restartGame = async (
       deadSocket.leave(deadRoom);
     }
 
-    console.log(`[DeadChat] Cleared ${socketsInDeadRoom.length} sockets from ${deadRoom} on restart`);
+    console.log(
+      `[DeadChat] Cleared ${socketsInDeadRoom.length} sockets from ${deadRoom} on restart`
+    );
 
     io.to(id).emit(wsEvents.gameUpdate, dataNormalize(game));
   } catch (error) {

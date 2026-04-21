@@ -3,29 +3,39 @@ import { livekitService } from '../services/livekitService';
 
 const livekitRouter = express.Router();
 
+const roomLocks = new Map<string, Promise<any>>();
+
 /**
  * Generate access token for joining a room
  */
 livekitRouter.post('/token', async (req, res, next) => {
-  try {
-    const { roomName, participantName, metadata } = req.body;
+  const { roomName, participantName, metadata } = req.body;
 
-    if (!roomName || !participantName) {
-      return res.status(400).json({
-        error: 'roomName and participantName are required',
-      });
-    }
+  if (!roomName || !participantName) {
+    return res.status(400).json({
+      error: 'roomName and participantName are required',
+    });
+  }
 
+  const prev = roomLocks.get(roomName) ?? Promise.resolve();
+  const tokenPromise = prev.then(async () => {
     // Ensure room exists
     await livekitService.createRoom(roomName);
 
     // Generate token
-    const token = await livekitService.generateAccessToken(
+    return livekitService.generateAccessToken(
       roomName,
       participantName,
       metadata
     );
+  });
+  roomLocks.set(
+    roomName,
+    tokenPromise.catch(() => {})
+  );
 
+  try {
+    const token = await tokenPromise;
     res.sendResponse({
       token,
       wsUrl: process.env.LIVEKIT_WS_URL || 'ws://localhost:7880',
