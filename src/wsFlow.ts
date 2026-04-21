@@ -51,6 +51,7 @@ export enum wsEvents {
   peerDisconnect = 'peerDisconnect',
   gameReaction = 'gameReaction',
   healthCheck = 'healthCheck',
+  gameNotFound = 'gameNotFound',
 }
 
 export const userSocketMap = new Map<string, string>();
@@ -222,6 +223,13 @@ export const wsFlow = (io: Server) => {
       }
 
       const game = await gamesService.getGame(roomId);
+
+      if (!game) {
+        console.log(`[WS] User ${userId} tried to join non-existent room ${roomId}.`);
+        socket.emit(wsEvents.gameNotFound, { roomId });
+        return;
+      }
+
       const shortGame = createGamesShortData(game);
 
       // The HTTP call to add the player may not have completed yet —
@@ -249,6 +257,11 @@ export const wsFlow = (io: Server) => {
       }
 
       const game = await gamesService.getGame(roomId);
+
+      if (!game) {
+        return;
+      }
+
       const shortGame = createGamesShortData(game);
 
       // The HTTP call to remove the player may not have completed yet —
