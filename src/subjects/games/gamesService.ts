@@ -62,7 +62,7 @@ setInterval(async () => {
   }
 }, 15000); // Фіксація в базу кожні 15 секунд
 
-export const forceSaveGame = (id: string) => {
+export const forceSaveGame = async (id: string) => {
   dirtyGames.delete(id.toString()); // Видаляємо з черги агрегатора
   const gameObj = gameCache.get(id) as any;
   if (!gameObj) return;
@@ -71,14 +71,12 @@ export const forceSaveGame = (id: string) => {
   delete copy._id;
 
   const startDb = Date.now();
-  Games.updateOne({ _id: id }, { $set: copy })
-    .exec()
-    .then(() =>
-      console.log(
-        `[DB Force Save] Game ${id} saved instantly in ${Date.now() - startDb}ms`
-      )
-    )
-    .catch((e) => console.error('[DB Force Save Error]:', e));
+  try {
+    await Games.updateOne({ _id: id }, { $set: copy }).exec();
+    console.log(`[DB Force Save] Game ${id} saved instantly in ${Date.now() - startDb}ms`);
+  } catch(e) {
+    console.error('[DB Force Save Error]:', e);
+  }
 };
 // ------------------------------------------------
 
@@ -260,7 +258,7 @@ export const addGamePlayers = (id: string, playerId: string) =>
       gameObj.players.push(playerId);
       gameCache.set(id, gameObj);
       // Player join is a key event — force immediate DB sync instead of waiting for the aggregator
-      forceSaveGame(id);
+      await forceSaveGame(id);
     }
 
     console.log(
@@ -282,7 +280,7 @@ export const removeGamePlayers = (id: string, playerId: string) =>
       gameObj.players.splice(index, 1);
       gameCache.set(id, gameObj);
       // Player leave is a key event — force immediate DB sync instead of waiting for the aggregator
-      forceSaveGame(id);
+      await forceSaveGame(id);
       console.log(
         `[removeGamePlayers] Successfully removed player ${playerId} (left: ${gameObj.players.length})`
       );

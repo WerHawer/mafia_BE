@@ -50,6 +50,7 @@ export enum wsEvents {
   manualWake = 'manualWake',
   peerDisconnect = 'peerDisconnect',
   gameReaction = 'gameReaction',
+  healthCheck = 'healthCheck',
 }
 
 export const userSocketMap = new Map<string, string>();
@@ -60,7 +61,7 @@ const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // How long to wait before treating a disconnected player as permanently gone.
 // Gives enough time for brief network hiccups / page refreshes, but short enough
 // to feel responsive when a player genuinely closes the browser.
-const GRACEFUL_RECONNECT_TIMEOUT_MS = 15_000;
+const GRACEFUL_RECONNECT_TIMEOUT_MS = 30_000;
 
 const handlePlayerDisconnectTimeout = async (
   userId: string,
@@ -197,6 +198,19 @@ export const wsFlow = (io: Server) => {
         }
       }
     );
+
+    socket.on(wsEvents.healthCheck, (data, callback) => {
+      const { gameId, userId } = data || {};
+      if (gameId && userId) {
+        if (!socket.rooms.has(gameId)) {
+          console.log(`[HealthCheck] User ${userId} was not in room ${gameId}. Force joining.`);
+          socket.join(gameId);
+        }
+      }
+      if (typeof callback === 'function') {
+        callback({ ok: true });
+      }
+    });
 
     socket.on(wsEvents.roomConnection, async ([roomId, userId]) => {
       socket.join(roomId);
@@ -426,17 +440,14 @@ export const wsFlow = (io: Server) => {
 
           const shouldMute = !enabled;
 
+          // NOTE: We do NOT call livekitService.muteParticipantTrackBySource() here.
+          // LiveKit Server SDK can only mute (not unmute) remotely, which causes
+          // the SFU to block the video stream permanently even after unmute commands.
+          // Instead, we rely entirely on client-side muting via the WS event below.
           if (shouldMute) {
-            await livekitService.muteParticipantTrackBySource(
-              roomId,
-              participantIdentity,
-              'camera',
-              true
-            );
+            console.log(`[WS] Mute camera request for ${participantIdentity} — client will handle`);
           } else {
-            console.log(
-              `[WS] Unmute request for camera - sending command to client ${participantIdentity}`
-            );
+            console.log(`[WS] Unmute camera request for ${participantIdentity} — client will handle`);
           }
 
           io.to(roomId).emit(wsEvents.userCameraStatusChanged, {
@@ -505,17 +516,14 @@ export const wsFlow = (io: Server) => {
 
           const shouldMute = !enabled;
 
+          // NOTE: We do NOT call livekitService.muteParticipantTrackBySource() here.
+          // LiveKit Server SDK can only mute (not unmute) remotely, which causes
+          // the SFU to block the audio stream permanently even after unmute commands.
+          // Instead, we rely entirely on client-side muting via the WS event below.
           if (shouldMute) {
-            await livekitService.muteParticipantTrackBySource(
-              roomId,
-              participantIdentity,
-              'microphone',
-              true
-            );
+            console.log(`[WS] Mute microphone request for ${participantIdentity} — client will handle`);
           } else {
-            console.log(
-              `[WS] Unmute request for microphone - sending command to client ${participantIdentity}`
-            );
+            console.log(`[WS] Unmute microphone request for ${participantIdentity} — client will handle`);
           }
 
           io.to(roomId).emit(wsEvents.userMicrophoneStatusChanged, {
@@ -588,61 +596,20 @@ export const wsFlow = (io: Server) => {
             `[Batch] Processing ${usersToProcess.length} users (excluded: ${excludedUserIds.length}) - ${enabled ? 'enabling' : 'disabling'} microphones`
           );
 
-          const shouldMute = !enabled;
-
-          if (shouldMute) {
-            const results = await Promise.allSettled(
-              usersToProcess.map(async (userId) => {
-                try {
-                  await livekitService.muteParticipantTrackBySource(
-                    roomId,
-                    userId,
-                    'microphone',
-                    true
-                  );
-
-                  io.to(roomId).emit(wsEvents.userMicrophoneStatusChanged, {
-                    userId,
-                    participantIdentity: userId,
-                    enabled: false,
-                    targetIdentity: userId,
-                  });
-
-                  return { userId, success: true };
-                } catch (error) {
-                  console.error(
-                    `[Batch] Failed to mute microphone for user ${userId}:`,
-                    error
-                  );
-                  return { userId, success: false, error };
-                }
-              })
-            );
-
-            const successful = results.filter(
-              (r) => r.status === 'fulfilled' && r.value.success
-            );
-            console.log(
-              `[Batch] Muted ${successful.length}/${usersToProcess.length} microphones`
-            );
-          } else {
-            console.log(
-              `[Batch] Unmute request - sending commands to ${usersToProcess.length} clients`
-            );
-
-            usersToProcess.forEach((userId) => {
-              io.to(roomId).emit(wsEvents.userMicrophoneStatusChanged, {
-                userId,
-                participantIdentity: userId,
-                enabled: true,
-                targetIdentity: userId,
-              });
+          // Client-side only muting — no LiveKit Server SDK calls.
+          // Server SDK only mutes (can't unmute), so we use WS signaling exclusively.
+          usersToProcess.forEach((userId) => {
+            io.to(roomId).emit(wsEvents.userMicrophoneStatusChanged, {
+              userId,
+              participantIdentity: userId,
+              enabled,
+              targetIdentity: userId,
             });
+          });
 
-            console.log(
-              `[Batch] Sent unmute commands to ${usersToProcess.length} users`
-            );
-          }
+          console.log(
+            `[Batch] Sent ${enabled ? 'unmute' : 'mute'} commands to ${usersToProcess.length} microphones`
+          );
 
           socket.emit('batchOperationComplete', {
             operation: 'toggleMicrophones',
@@ -709,61 +676,20 @@ export const wsFlow = (io: Server) => {
             `[Batch] Processing ${usersToProcess.length} users (excluded: ${excludedUserIds.length}) - ${enabled ? 'enabling' : 'disabling'} cameras`
           );
 
-          const shouldMute = !enabled;
-
-          if (shouldMute) {
-            const results = await Promise.allSettled(
-              usersToProcess.map(async (userId) => {
-                try {
-                  await livekitService.muteParticipantTrackBySource(
-                    roomId,
-                    userId,
-                    'camera',
-                    true
-                  );
-
-                  io.to(roomId).emit(wsEvents.userCameraStatusChanged, {
-                    userId,
-                    participantIdentity: userId,
-                    enabled: false,
-                    targetIdentity: userId,
-                  });
-
-                  return { userId, success: true };
-                } catch (error) {
-                  console.error(
-                    `[Batch] Failed to mute camera for user ${userId}:`,
-                    error
-                  );
-                  return { userId, success: false, error };
-                }
-              })
-            );
-
-            const successful = results.filter(
-              (r) => r.status === 'fulfilled' && r.value.success
-            );
-            console.log(
-              `[Batch] Muted ${successful.length}/${usersToProcess.length} cameras`
-            );
-          } else {
-            console.log(
-              `[Batch] Unmute request - sending commands to ${usersToProcess.length} clients`
-            );
-
-            usersToProcess.forEach((userId) => {
-              io.to(roomId).emit(wsEvents.userCameraStatusChanged, {
-                userId,
-                participantIdentity: userId,
-                enabled: true,
-                targetIdentity: userId,
-              });
+          // Client-side only muting — no LiveKit Server SDK calls.
+          // Server SDK only mutes (can't unmute), so we use WS signaling exclusively.
+          usersToProcess.forEach((userId) => {
+            io.to(roomId).emit(wsEvents.userCameraStatusChanged, {
+              userId,
+              participantIdentity: userId,
+              enabled,
+              targetIdentity: userId,
             });
+          });
 
-            console.log(
-              `[Batch] Sent unmute camera commands to ${usersToProcess.length} users`
-            );
-          }
+          console.log(
+            `[Batch] Sent ${enabled ? 'unmute' : 'mute'} commands to ${usersToProcess.length} cameras`
+          );
 
           socket.emit('batchOperationComplete', {
             operation: 'toggleCameras',

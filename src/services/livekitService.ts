@@ -155,14 +155,17 @@ export class LiveKitService {
     trackSource: 'camera' | 'microphone',
     muted: boolean
   ) {
-    try {
-      if (!muted) {
-        console.log(
-          `[LiveKit] Unmute request for ${trackSource} - this will be handled by client-side`
-        );
-        return { handledByClient: true };
-      }
+    // LiveKit Server SDK only supports remote MUTING.
+    // Remote unmuting (muted=false) always throws "remote unmute not enabled".
+    // Unmuting is handled entirely by the client side via WebSocket event.
+    if (!muted) {
+      console.log(
+        `[LiveKit] Unmute for ${trackSource} will be handled client-side for ${participantIdentity}`
+      );
+      return { handledByClient: true };
+    }
 
+    try {
       const participants = await this.listParticipants(roomName);
       const participant = participants.find(
         (p) => p.identity === participantIdentity
@@ -178,16 +181,10 @@ export class LiveKitService {
       const track = participant.tracks.find((t) => t.source === targetSource);
 
       if (!track) {
-        console.error(
-          `[LiveKit] ${trackSource} track (source=${targetSource}) not found for participant ${participantIdentity}`
+        console.warn(
+          `[LiveKit] ${trackSource} track (source=${targetSource}) not found for participant ${participantIdentity}. Skipping server mute restriction.`
         );
-        console.error(
-          `[LiveKit] Available tracks:`,
-          participant.tracks.map((t) => `source=${t.source}, type=${t.type}`)
-        );
-        throw new Error(
-          `${trackSource} track not found for participant ${participantIdentity}`
-        );
+        return { handledByServer: false };
       }
 
       console.log(
@@ -198,7 +195,7 @@ export class LiveKitService {
         roomName,
         participantIdentity,
         track.sid,
-        true
+        muted
       );
 
       console.log(
