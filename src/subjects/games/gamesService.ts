@@ -102,6 +102,7 @@ const initialGameFlow = {
   isExtraSpeech: false,
   day: 0,
   proposed: [],
+  proposedBy: {},
   voted: {},
   shoot: {},
   killed: [],
@@ -126,6 +127,7 @@ const initialGame = {
 const resetDayNightFlow = {
   'gameFlow.speaker': '',
   'gameFlow.proposed': [],
+  'gameFlow.proposedBy': {},
   'gameFlow.shoot': {},
   'gameFlow.voted': {},
   'gameFlow.isVote': false,
@@ -357,6 +359,7 @@ export const startDay = async (id: string) => {
   // Manual resetDayNightFlow mapping
   gameObj.gameFlow.speaker = '';
   gameObj.gameFlow.proposed = [];
+  gameObj.gameFlow.proposedBy = {};
   gameObj.gameFlow.shoot = {};
   gameObj.gameFlow.voted = {};
   gameObj.gameFlow.isVote = false;
@@ -386,6 +389,7 @@ export const startNight = async (id: string) => {
   // Manual resetDayNightFlow mapping
   gameObj.gameFlow.speaker = '';
   gameObj.gameFlow.proposed = [];
+  gameObj.gameFlow.proposedBy = {};
   gameObj.gameFlow.shoot = {};
   gameObj.gameFlow.voted = {};
   gameObj.gameFlow.isVote = false;
@@ -402,7 +406,7 @@ export const startNight = async (id: string) => {
   return gameObj;
 };
 
-export const addUserToProposed = async (id: string, userId: string) => {
+export const addUserToProposed = async (id: string, userId: string, proposerId: string) => {
   const game = await getGame(id);
 
   if (!game) {
@@ -412,13 +416,23 @@ export const addUserToProposed = async (id: string, userId: string) => {
 
   const gameObj = toPlainGameObj(game);
 
+  if (!gameObj.gameFlow.proposedBy) {
+    gameObj.gameFlow.proposedBy = {};
+  }
+
   if (gameObj.gameFlow.proposed.includes(userId)) {
     console.log(`[addUserToProposed] User ${userId} already in proposed list`);
     return gameObj;
   }
 
+  if (Object.values(gameObj.gameFlow.proposedBy).includes(proposerId)) {
+    console.log(`[addUserToProposed] Proposer ${proposerId} already proposed someone`);
+    return gameObj;
+  }
+
   // Оновлюємо кеш миттєво
   gameObj.gameFlow.proposed.push(userId);
+  gameObj.gameFlow.proposedBy[userId] = proposerId;
   gameCache.set(id, gameObj);
   markGameDirty(id);
 
@@ -434,6 +448,11 @@ export const addVote = async (
   if (!game) return null;
 
   const gameObj = toPlainGameObj(game);
+  if (targetUserId === voterId) {
+    console.error(`[addVote] Player ${voterId} tried to vote for themselves`);
+    return gameObj;
+  }
+
   if (!gameObj.gameFlow.voted) gameObj.gameFlow.voted = {};
   if (!gameObj.gameFlow.voted[targetUserId])
     gameObj.gameFlow.voted[targetUserId] = [];

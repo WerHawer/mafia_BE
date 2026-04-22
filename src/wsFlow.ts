@@ -491,12 +491,14 @@ export const wsFlow = (io: Server) => {
         participantIdentity,
         enabled,
         requesterId,
+        forceMute,
       }: {
         roomId: string;
         userId: string;
         participantIdentity: string;
         enabled: boolean;
         requesterId: string;
+        forceMute?: boolean;
       }) => {
         try {
           if (!roomId || !userId || !participantIdentity || !requesterId) {
@@ -544,6 +546,7 @@ export const wsFlow = (io: Server) => {
             participantIdentity,
             enabled,
             targetIdentity: participantIdentity,
+            forceMute,
           });
 
           console.log(

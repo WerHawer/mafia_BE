@@ -17,6 +17,7 @@ export interface IGameFlow {
   isExtraSpeech: boolean;
   day: number;
   proposed: string[];
+  proposedBy: Record<string, string>;
   voted: Record<string, string[]>;
   wakeUp: string[] | string;
   shoot: Record<string, { shooters: string[]; shots: { x: number; y: number }[] }>;

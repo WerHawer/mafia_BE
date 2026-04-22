@@ -404,14 +404,14 @@ export const addUserToProposed = async (
   next: NextFunction
 ) => {
   const { id } = req.params;
-  const { userId } = req.body;
+  const { userId, proposerId } = req.body;
 
   if (!idFormatValidation(id)) {
     return res.sendError({ message: 'Invalid Game ID format', status: 400 });
   }
 
-  if (!userId) {
-    return res.sendError({ message: 'userId is required', status: 400 });
+  if (!userId || !proposerId) {
+    return res.sendError({ message: 'userId and proposerId are required', status: 400 });
   }
 
   if (!idFormatValidation(userId)) {
@@ -419,13 +419,13 @@ export const addUserToProposed = async (
   }
 
   try {
-    const game = await gamesService.addUserToProposed(id, userId);
+    const game = await gamesService.addUserToProposed(id, userId, proposerId);
 
     if (!game) {
       return res.sendError({ message: 'Game not found', status: 404 });
     }
 
-    res.sendResponse(game).io.to(id).emit(wsEvents.addToProposed, userId);
+    res.sendResponse(game).io.to(id).emit(wsEvents.addToProposed, { userId, proposerId });
   } catch (error) {
     next(error);
   }
