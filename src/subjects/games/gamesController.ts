@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { createGamesShortData } from '../../helpers/createGamesShortData';
 import { dataNormalize } from '../../helpers/dataNormalize';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
-import { userSocketMap, wsEvents, scheduleEmptyGameDeactivation, cancelEmptyGameDeactivation } from '../../wsFlow';
+import { userSocketMap, wsEvents, scheduleEmptyGameDeactivation, cancelEmptyGameDeactivation, handleGMLeave } from '../../wsFlow';
 import * as gamesService from './gamesService';
 import { IGame } from './gamesTypes';
 
@@ -223,6 +223,13 @@ export const removeUserFromGame = async (
 
     const normalizedGame = dataNormalize(game);
     const io = res.sendResponse(normalizedGame).io;
+
+    // Handle GM leaving via HTTP (voluntary leave button)
+    const wasGM = (game as any).gm?.toString() === userId;
+    const wasStarted: boolean = (game as any).gameFlow?.isStarted ?? false;
+    if (wasGM && game.players.length > 0) {
+      handleGMLeave(id, userId, [...game.players], wasStarted, io);
+    }
 
     // If no players left: immediately restart so the game is joinable again,
     // then start the 1-minute countdown to full deactivation

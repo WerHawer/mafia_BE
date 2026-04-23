@@ -52,6 +52,7 @@ export enum wsEvents {
   gameReaction = 'gameReaction',
   healthCheck = 'healthCheck',
   gameNotFound = 'gameNotFound',
+  gmChanged = 'gmChanged',
 }
 
 export const userSocketMap = new Map<string, string>();
@@ -101,6 +102,89 @@ export const cancelEmptyGameDeactivation = (gameId: string): void => {
   }
 };
 
+// Tracks pending "restart after GM left during active game" timers per gameId
+const gmLeftTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * Pick next GM from remaining players and update the game.
+ * Returns the updated game or null if no one left.
+ */
+const assignNextGM = async (gameId: string, remainingPlayers: string[]) => {
+  if (remainingPlayers.length === 0) return null;
+  const newGM = remainingPlayers[0];
+  const updated = await gamesService.updateGame(gameId, { gm: newGM });
+  return updated;
+};
+
+/**
+ * Handle GM leaving the game:
+ * - If game not started: assign next GM immediately.
+ * - If game was active: wait 1 min, restart, assign next GM.
+ */
+export const handleGMLeave = (
+  gameId: string,
+  leavingGMId: string,
+  remainingPlayers: string[],
+  wasStarted: boolean,
+  io: Server
+): void => {
+  if (remainingPlayers.length === 0) return; // no one to become GM
+
+  if (!wasStarted) {
+    // Immediate GM reassignment before game starts
+    assignNextGM(gameId, remainingPlayers).then((updatedGame) => {
+      if (!updatedGame) return;
+      io.to(gameId).emit(wsEvents.gameUpdate, dataNormalize(updatedGame));
+      io.to(gameId).emit(wsEvents.gmChanged, {
+        newGMId: updatedGame.gm,
+        reason: 'left_before_start',
+      });
+      console.log(`[GM] Game ${gameId}: new GM assigned to ${updatedGame.gm} (before start)`);
+    }).catch((err) => console.error(`[GM] Failed to assign new GM for game ${gameId}:`, err));
+    return;
+  }
+
+  // Cancel any existing timer for this game
+  const existingTimer = gmLeftTimers.get(gameId);
+  if (existingTimer) clearTimeout(existingTimer);
+
+  console.log(`[GM] Game ${gameId}: GM left during active game — restarting in 60s`);
+
+  // Notify players immediately that GM left
+  io.to(gameId).emit(wsEvents.gmChanged, {
+    newGMId: null,
+    reason: 'left_during_game',
+    restartsIn: 60,
+  });
+
+  const timer = setTimeout(async () => {
+    gmLeftTimers.delete(gameId);
+    try {
+      const restartedGame = await gamesService.restartGame(gameId);
+      if (!restartedGame) return;
+
+      // Get fresh player list after restart
+      const freshPlayers = restartedGame.players.filter((p: string) => p !== leavingGMId);
+      if (freshPlayers.length === 0) return;
+
+      const updatedGame = await assignNextGM(gameId, freshPlayers);
+      if (!updatedGame) return;
+
+      io.to(gameId).emit(wsEvents.gameUpdate, dataNormalize(updatedGame));
+      io.emit(wsEvents.gamesUpdate, createGamesShortData(updatedGame));
+      io.to(gameId).emit(wsEvents.gmChanged, {
+        newGMId: updatedGame.gm,
+        reason: 'restarted_after_gm_left',
+      });
+      console.log(`[GM] Game ${gameId} restarted. New GM: ${updatedGame.gm}`);
+    } catch (err) {
+      console.error(`[GM] Failed to restart game after GM left (game ${gameId}):`, err);
+    }
+  }, EMPTY_GAME_DEACTIVATION_MS);
+
+  gmLeftTimers.set(gameId, timer);
+};
+
 const handlePlayerDisconnectTimeout = async (
   userId: string,
   io: Server
@@ -125,6 +209,8 @@ const handlePlayerDisconnectTimeout = async (
     }
 
     const gameId = game._id.toString();
+    const wasGM = game.gm?.toString() === userId;
+    const wasStarted: boolean = game.gameFlow?.isStarted ?? false;
 
     let updatedGame = await gamesService.removeGamePlayers(gameId, userId);
 
@@ -133,6 +219,11 @@ const handlePlayerDisconnectTimeout = async (
         `[Disconnect] Failed to remove user ${userId} from game ${gameId}`
       );
       return;
+    }
+
+    // Handle GM leaving
+    if (wasGM && updatedGame.players.length > 0) {
+      handleGMLeave(gameId, userId, [...updatedGame.players], wasStarted, io);
     }
 
     // Immediately restart the game when the last player leaves so it's joinable again
