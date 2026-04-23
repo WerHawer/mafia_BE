@@ -137,6 +137,7 @@ const resetDayNightFlow = {
   'gameFlow.wakeUp': '',
   'gameFlow.sheriffCheck': '',
   'gameFlow.donCheck': '',
+  'gameFlow.prostituteBlockPos': undefined,
 };
 
 // Список ігор не кешуємо — дані мають бути завжди актуальними
@@ -355,6 +356,9 @@ export const startDay = async (id: string) => {
   // Оновлюємо in-memory
   gameObj.gameFlow.isNight = false;
   gameObj.gameFlow.prostituteBlock = newProstituteBlock;
+  if (!newProstituteBlock) {
+    delete gameObj.gameFlow.prostituteBlockPos;
+  }
   gameObj.gameFlow.day = (gameObj.gameFlow.day || 0) + 1;
 
   // Manual resetDayNightFlow mapping
@@ -385,6 +389,7 @@ export const startNight = async (id: string) => {
 
   gameObj.gameFlow.isNight = true;
   gameObj.gameFlow.prostituteBlock = '';
+  delete gameObj.gameFlow.prostituteBlockPos;
   gameObj.gameFlow.doctorSave = '';
 
   // Manual resetDayNightFlow mapping

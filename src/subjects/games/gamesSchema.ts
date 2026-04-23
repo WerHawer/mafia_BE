@@ -47,6 +47,10 @@ const gamesSchema = new Schema<IGame>({
     doctorSave: String,
     donCheck: String,
     prostituteBlock: String,
+    prostituteBlockPos: {
+      x: Number,
+      y: Number,
+    },
   },
 });
 
