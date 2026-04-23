@@ -14,6 +14,7 @@ const gamesSchema = new Schema<IGame>({
   gm: { type: String, required: true },
   maxPlayers: { type: Number, required: true },
   mafiaCount: { type: Number, required: true },
+  skipFirstNightIfOneMafia: { type: Boolean, default: true },
   additionalRoles: [String],
   mafia: [String],
   citizens: [String],

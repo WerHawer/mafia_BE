@@ -12,5 +12,6 @@ export const createGamesShortData = (game: IGame): IGameShort => ({
   creatingTime: game?.creatingTime,
   maxPlayers: game?.maxPlayers,
   mafiaCount: game?.mafiaCount,
+  skipFirstNightIfOneMafia: game?.skipFirstNightIfOneMafia,
   additionalRoles: game?.additionalRoles,
 });

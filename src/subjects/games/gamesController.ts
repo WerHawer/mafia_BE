@@ -83,6 +83,20 @@ export const updateGame = async (
   }
 
   try {
+    const nightActionKeys = ['gameFlow.sheriffCheck', 'gameFlow.doctorSave', 'gameFlow.donCheck', 'gameFlow.prostituteBlock'];
+    const isNightAction = Object.keys(req.body).some(key => nightActionKeys.includes(key));
+    
+    if (isNightAction) {
+      const existingGame = await gamesService.getGame(id);
+      if (existingGame) {
+        const isFirstNightSkipped = existingGame.gameFlow?.day === 1 && existingGame.mafiaCount === 1 && existingGame.skipFirstNightIfOneMafia;
+        const canPerformNightActions = (existingGame.gameFlow?.day || 0) > 1 || isFirstNightSkipped;
+        if (!canPerformNightActions) {
+          return res.status(403).send('Actions are not allowed during the first night');
+        }
+      }
+    }
+
     const game = await gamesService.updateGame(id, req.body);
 
     if (!game) {
@@ -528,6 +542,15 @@ export const addShoot = async (
   }
 
   try {
+    const existingGame = await gamesService.getGame(id);
+    if (existingGame) {
+      const isFirstNightSkipped = existingGame.gameFlow?.day === 1 && existingGame.mafiaCount === 1 && existingGame.skipFirstNightIfOneMafia;
+      const canPerformNightActions = (existingGame.gameFlow?.day || 0) > 1 || isFirstNightSkipped;
+      if (!canPerformNightActions) {
+        return res.status(403).send('Actions are not allowed during the first night');
+      }
+    }
+
     const game = await gamesService.addShoot(id, targetUserId, shooterId, shot);
 
     if (!game) {

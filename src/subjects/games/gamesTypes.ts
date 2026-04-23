@@ -41,6 +41,7 @@ export interface IGame {
   isActive: boolean;
   gm: string;
   mafiaCount: number;
+  skipFirstNightIfOneMafia?: boolean;
   additionalRoles: string[];
   mafia?: string[];
   citizens?: string[];
@@ -67,6 +68,7 @@ export interface IGameShort {
   gameType: GameType;
   creatingTime: number;
   mafiaCount: number;
+  skipFirstNightIfOneMafia?: boolean;
   additionalRoles: string[];
 }
 
