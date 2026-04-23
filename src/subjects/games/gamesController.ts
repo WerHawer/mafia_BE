@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { createGamesShortData } from '../../helpers/createGamesShortData';
 import { dataNormalize } from '../../helpers/dataNormalize';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
-import { userSocketMap, wsEvents } from '../../wsFlow';
+import { userSocketMap, wsEvents, scheduleEmptyGameDeactivation, cancelEmptyGameDeactivation } from '../../wsFlow';
 import * as gamesService from './gamesService';
 import { IGame } from './gamesTypes';
 
@@ -184,6 +184,8 @@ export const addUserToGame = async (
     const io = res.sendResponse(game).io;
 
     io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
+    // Cancel empty-game deactivation timer if someone rejoined
+    cancelEmptyGameDeactivation(id);
     // Broadcast to all clients so the home page game list stays in sync
     io.emit(wsEvents.roomConnection, {
       userId,
@@ -219,16 +221,23 @@ export const removeUserFromGame = async (
       return res.sendError({ message: 'Game not found', status: 404 });
     }
 
-    if (game.players.length === 0) {
-      game = await gamesService.updateGame(id, { isActive: false });
-    }
-
     const normalizedGame = dataNormalize(game);
     const io = res.sendResponse(normalizedGame).io;
 
+    // If no players left: immediately restart so the game is joinable again,
+    // then start the 1-minute countdown to full deactivation
+    if (game.players.length === 0) {
+      const restartedGame = await gamesService.restartGame(id);
+      if (restartedGame) {
+        game = restartedGame;
+        io.emit(wsEvents.gamesUpdate, dataNormalize(createGamesShortData(restartedGame)));
+      }
+      scheduleEmptyGameDeactivation(id, io);
+    }
+
     // Emit gameUpdate to everyone in the room including the leaving player,
     // so they also receive the updated player count while still on the game page.
-    io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
+    io.to(id).emit(wsEvents.gameUpdate, dataNormalize(game));
     // Broadcast roomLeave with the authoritative updated game data so the home
     // page game list reflects the correct player count immediately — this is
     // the definitive event since the cache is already updated at this point.
@@ -312,6 +321,8 @@ export const restartGame = async (
     );
 
     io.to(id).emit(wsEvents.gameUpdate, dataNormalize(game));
+    // Broadcast to all clients so the home-page list shows the game as joinable again
+    io.emit(wsEvents.gamesUpdate, createGamesShortData(game));
   } catch (error) {
     next(error);
   }
@@ -335,10 +346,10 @@ export const startGame = async (
       return res.sendError({ message: 'Game not found', status: 404 });
     }
 
-    res
-      .sendResponse(game)
-      .io.to(id)
-      .emit(wsEvents.gameUpdate, dataNormalize(game));
+    const io = res.sendResponse(game).io;
+    io.to(id).emit(wsEvents.gameUpdate, dataNormalize(game));
+    // Broadcast to all clients so the home-page list marks game as "in progress"
+    io.emit(wsEvents.gamesUpdate, createGamesShortData(game));
   } catch (error) {
     next(error);
   }

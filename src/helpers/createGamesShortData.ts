@@ -6,6 +6,7 @@ export const createGamesShortData = (game: IGame): IGameShort => ({
   playersCount: game?.players?.length || 0,
   isPrivate: game?.isPrivate,
   isActive: game?.isActive,
+  isStarted: game?.gameFlow?.isStarted ?? false,
   gm: game?.gm,
   gameType: game?.gameType,
   creatingTime: game?.creatingTime,

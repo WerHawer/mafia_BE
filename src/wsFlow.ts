@@ -59,10 +59,47 @@ export const userSocketMap = new Map<string, string>();
 // Tracks pending "remove from game" timers per userId for graceful reconnect support
 const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+// Tracks pending "deactivate empty game" timers per gameId
+const emptyGameTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 // How long to wait before treating a disconnected player as permanently gone.
-// Gives enough time for brief network hiccups / page refreshes, but short enough
-// to feel responsive when a player genuinely closes the browser.
 const GRACEFUL_RECONNECT_TIMEOUT_MS = 30_000;
+
+// How long to wait before deactivating an empty game (1 minute)
+const EMPTY_GAME_DEACTIVATION_MS = 60_000;
+
+// Start a 1-minute countdown to deactivate an empty game.
+// Can be cancelled if a player rejoins before it fires.
+export const scheduleEmptyGameDeactivation = (gameId: string, io: Server): void => {
+  // Cancel any existing timer for this game first
+  cancelEmptyGameDeactivation(gameId);
+
+  console.log(`[EmptyGame] Scheduling deactivation of game ${gameId} in ${EMPTY_GAME_DEACTIVATION_MS / 1000}s`);
+
+  const timer = setTimeout(async () => {
+    emptyGameTimers.delete(gameId);
+    try {
+      const updatedGame = await gamesService.updateGame(gameId, { isActive: false });
+      if (!updatedGame) return;
+      // Broadcast to ALL clients so home-page list removes this game
+      io.emit(wsEvents.gamesUpdate, createGamesShortData(updatedGame));
+      console.log(`[EmptyGame] Game ${gameId} deactivated after ${EMPTY_GAME_DEACTIVATION_MS / 1000}s with 0 players`);
+    } catch (err) {
+      console.error(`[EmptyGame] Failed to deactivate game ${gameId}:`, err);
+    }
+  }, EMPTY_GAME_DEACTIVATION_MS);
+
+  emptyGameTimers.set(gameId, timer);
+};
+
+export const cancelEmptyGameDeactivation = (gameId: string): void => {
+  const existing = emptyGameTimers.get(gameId);
+  if (existing) {
+    clearTimeout(existing);
+    emptyGameTimers.delete(gameId);
+    console.log(`[EmptyGame] Cancelled deactivation timer for game ${gameId} — player rejoined`);
+  }
+};
 
 const handlePlayerDisconnectTimeout = async (
   userId: string,
@@ -98,9 +135,20 @@ const handlePlayerDisconnectTimeout = async (
       return;
     }
 
-    // Deactivate the game when the last player leaves
+    // Immediately restart the game when the last player leaves so it's joinable again
     if (updatedGame.players.length === 0) {
-      updatedGame = await gamesService.updateGame(gameId, { isActive: false });
+      try {
+        const restartedGame = await gamesService.restartGame(gameId);
+        if (restartedGame) {
+          updatedGame = restartedGame;
+          io.emit(wsEvents.gamesUpdate, createGamesShortData(restartedGame));
+          console.log(`[Disconnect] Game ${gameId} auto-restarted immediately after last player left`);
+        }
+      } catch (err) {
+        console.error(`[Disconnect] Failed to auto-restart game ${gameId}:`, err);
+      }
+      // Schedule deactivation if no one joins within 1 minute
+      scheduleEmptyGameDeactivation(gameId, io);
     }
 
     io.to(gameId).emit(wsEvents.gameUpdate, dataNormalize(updatedGame));
@@ -229,6 +277,9 @@ export const wsFlow = (io: Server) => {
         socket.emit(wsEvents.gameNotFound, { roomId });
         return;
       }
+
+      // Cancel empty-game deactivation timer if someone is joining
+      cancelEmptyGameDeactivation(roomId);
 
       const shortGame = createGamesShortData(game);
 
