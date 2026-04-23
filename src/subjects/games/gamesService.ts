@@ -93,6 +93,7 @@ export const forceSaveGame = async (id: string) => {
 const initialGameFlow = {
   speaker: '',
   speakTime: 60,
+  candidateSpeakTime: 30,
   votesTime: 15,
   isStarted: false,
   isFinished: false,

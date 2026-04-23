@@ -8,6 +8,7 @@ export enum GameType {
 export interface IGameFlow {
   speaker: string;
   speakTime: number;
+  candidateSpeakTime: number;
   votesTime: number;
   isStarted: boolean;
   isFinished: boolean;
