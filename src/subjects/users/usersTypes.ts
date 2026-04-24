@@ -17,13 +17,7 @@ export interface IUserCreate {
   password: string;
 }
 
-export interface IUserAvatarUrls {
-  sm: string;
-  md: string;
-  lg: string;
-}
-
 export interface IUserAvatar {
-  urls: IUserAvatarUrls;
+  url: string;
   id?: Types.ObjectId;
 }

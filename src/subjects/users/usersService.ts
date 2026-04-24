@@ -1,5 +1,5 @@
 import { Avatars, Users } from './usersSchema';
-import { IUser, IUserAvatarUrls } from './usersTypes';
+import { IUser } from './usersTypes';
 import { Populate } from '../DBTypes';
 
 const usersOptions = {
@@ -20,8 +20,8 @@ export const createUser = async (user: IUser) => Users.create(user);
 export const updateUser = async (id: string, user: Partial<IUser>) =>
   Users.findByIdAndUpdate(id, user, { ...usersOptions, new: true });
 
-export const uploadUserAvatar = async (urls: IUserAvatarUrls) =>
-  Avatars.create({ urls });
+export const uploadUserAvatar = async (avatar: string) =>
+  Avatars.create({ url: avatar });
 
 export const deleteUser = async (id: string) => Users.findByIdAndDelete(id);
 
@@ -33,3 +33,4 @@ export const getUsersByIds = async (ids: string[]) =>
 
 export const setUserOnlineStatus = async (id: string, isOnline: boolean) =>
   Users.findByIdAndUpdate(id, { isOnline }, { new: true });
+

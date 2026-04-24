@@ -4,11 +4,11 @@ import { idFormatValidation } from '../../helpers/idFormatValidation';
 import { createNewUserObj } from '../../helpers/createNewUser';
 import {
   deleteFileFromAWS,
-  uploadBufferToAWS,
+  uploadFileToAWS,
   checkImageModeration,
 } from '../../awsSdk';
 import { Populate } from '../DBTypes';
-import { IUserAvatar, IUserAvatarUrls } from './usersTypes';
+import { IUserAvatar } from './usersTypes';
 import { createToken } from '../../helpers/createToken';
 import { createRefreshToken } from '../../helpers/createRefreshToken';
 import { comparePassword } from '../../helpers/comparePassword';
@@ -17,7 +17,6 @@ import { getSecret } from '../../helpers/getSecret';
 import * as messagesService from '../messages/messagesService';
 import { wsEvents } from '../../wsFlow';
 import { dataNormalize } from '../../helpers/dataNormalize';
-import { resizeAvatar, AVATAR_SIZES, AvatarSize } from '../../helpers/resizeAvatar';
 
 export const getAllUsers = async (
   req: Request,
@@ -240,7 +239,7 @@ export const updateUserAvatar = async (
 
   const { description } = req.body;
   const { path, filename } = req.file;
-  const timestamp = Date.now();
+  const dateName = `${Date.now()}_${filename}`;
 
   try {
     const user = await userService.getUserById(id);
@@ -263,36 +262,16 @@ export const updateUserAvatar = async (
       });
     }
 
-    // Resize original image into 3 distinct sizes in parallel
-    const buffers = await resizeAvatar(path);
+    const avatarUrl = await uploadFileToAWS(path, dateName);
 
-    // Upload all 3 resized buffers to S3 concurrently
-    const uploadResults = await Promise.all(
-      AVATAR_SIZES.map(({ key }) => {
-        const s3Key = `${timestamp}_${key}_${filename}`;
-        return uploadBufferToAWS(buffers[key], s3Key).then((url) => ({ key, url }));
-      })
-    );
-
-    const urls = uploadResults.reduce<IUserAvatarUrls>(
-      (acc, { key, url }) => ({ ...acc, [key]: url }),
-      {} as IUserAvatarUrls
-    );
-
-    const avatar = await userService.uploadUserAvatar(urls);
+    const avatar = await userService.uploadUserAvatar(avatarUrl);
 
     const prevAvatar = user.avatar?.[0] as IUserAvatar;
 
     if (prevAvatar) {
       await userService.deleteUserAvatar(`${prevAvatar.id}`);
-
-      // Delete all 3 size variants from S3
-      await Promise.allSettled(
-        Object.values(prevAvatar.urls).map((url) => {
-          const prevKey = url.split('/').pop();
-          return deleteFileFromAWS(prevKey);
-        })
-      );
+      const prevAvatarName = prevAvatar.url.split('/').pop();
+      await deleteFileFromAWS(prevAvatarName);
     }
 
     user.avatar = [avatar._id];
@@ -351,18 +330,6 @@ export const deleteUserAvatar = async (
     return res.status(400).send('Invalid Avatar ID format');
 
   try {
-    const { Avatars } = await import('../users/usersSchema');
-    const avatarDoc = await Avatars.findById(avatarId);
-
-    if (avatarDoc?.urls) {
-      await Promise.allSettled(
-        Object.values(avatarDoc.urls).map((url) => {
-          const key = (url as string).split('/').pop();
-          return deleteFileFromAWS(key);
-        })
-      );
-    }
-
     await userService.deleteUserAvatar(avatarId);
 
     // Скидання кешу повідомлень і розсилка оновленого списку (без аватарки)
@@ -371,9 +338,10 @@ export const deleteUserAvatar = async (
 
     res.io.emit(wsEvents.messagesUpdate, normalizedMessages);
 
+    // Зверніть увагу: ми використовуємо розширений sendResponse
     res.sendResponse({
       message: 'Avatar deleted successfully',
-      messages: normalizedMessages,
+      messages: normalizedMessages
     });
   } catch (error) {
     next(error);
