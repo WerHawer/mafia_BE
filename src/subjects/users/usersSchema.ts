@@ -2,8 +2,17 @@ import { model, Schema, Types } from 'mongoose';
 import { IUser, IUserAvatar } from './usersTypes';
 import { DBSubject } from '../DBTypes';
 
+const avatarUrlsSchema = new Schema(
+  {
+    sm: { type: String, required: true },
+    md: { type: String, required: true },
+    lg: { type: String, required: true },
+  },
+  { _id: false }
+);
+
 const avatarSchema = new Schema<IUserAvatar>({
-  url: { type: String, required: true },
+  urls: { type: avatarUrlsSchema, required: true },
 });
 
 export const Avatars = model(DBSubject.Avatars, avatarSchema);

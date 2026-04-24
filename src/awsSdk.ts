@@ -2,7 +2,9 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
+import { Readable } from 'stream';
 import {
   RekognitionClient,
   DetectModerationLabelsCommand,
@@ -116,6 +118,38 @@ export const uploadFileToAWS = async (file: string, key: string) => {
   } catch (err) {
     console.log('Error', err);
   }
+};
+
+export const uploadBufferToAWS = async (
+  buffer: Buffer,
+  key: string,
+  contentType = 'image/jpeg'
+): Promise<string> => {
+  const params = {
+    Bucket: bucketName,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+  };
+
+  await s3.send(new PutObjectCommand(params));
+  console.log(`Avatar buffer ${key} uploaded to AWS`);
+
+  return linkGenerator(key);
+};
+
+export const downloadBufferFromAWS = async (key: string): Promise<Buffer> => {
+  const command = new GetObjectCommand({ Bucket: bucketName, Key: key });
+  const response = await s3.send(command);
+
+  const stream = response.Body as Readable;
+
+  return new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
 };
 
 export const checkImageModeration = async (
