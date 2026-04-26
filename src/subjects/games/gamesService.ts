@@ -326,11 +326,84 @@ export const restartGame = async (id: string) => {
   return gameObj;
 };
 
+/**
+ * Fisher-Yates shuffle — повертає новий перемішаний масив.
+ */
+const shuffleArray = <T>(arr: T[]): T[] => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
 export const startGame = async (id: string) => {
   const game = await getGame(id);
   if (!game) return null;
 
   const gameObj = toPlainGameObj(game);
+
+  // --- Перемішування гравців ---
+  // Перемішуємо всіх гравців на початку, щоб черга мовлення була випадковою
+  const playersBefore = [...(gameObj.players as string[])];
+  gameObj.players = shuffleArray(gameObj.players as string[]);
+  console.log(`[startGame] Shuffling players for game ${id}. Before: ${playersBefore.length} players. Order changed: ${JSON.stringify(playersBefore) !== JSON.stringify(gameObj.players)}`);
+
+  // --- Розподіл ролей ---
+  // Беремо всіх гравців, крім GM, з уже перемішаного списку
+  const gmId = gameObj.gm?.toString();
+  const activePlayers: string[] = (gameObj.players as string[]).filter(
+    (p) => p.toString() !== gmId
+  );
+
+  const playersCount = activePlayers.length;
+
+  // Формула: 8+ → 3 мафії, 7 → 2, ≤6 → 1
+  const mafiaCount =
+    playersCount >= 8 ? 3 : playersCount === 7 ? 2 : 1;
+
+  // Оскільки ми вже перемішали gameObj.players, activePlayers також у випадковому порядку.
+  // Але для додаткової впевненості у розподілі ролей можемо перемішати ще раз самі активні ролі.
+  const shuffled = shuffleArray(activePlayers);
+  let pool = [...shuffled];
+
+  // Перші mafiaCount — мафія (перший є Доном)
+  const mafia = pool.splice(0, mafiaCount);
+
+  // Обов'язково Шериф
+  const sheriff = pool.splice(0, 1)[0];
+
+  // Додаткові ролі з additionalRoles (якщо є і якщо є достатньо гравців)
+  const additionalRoles: string[] = gameObj.additionalRoles ?? [];
+  let doctor: string | undefined;
+  let prostitute: string | undefined;
+  let maniac: string | undefined;
+
+  for (const role of additionalRoles) {
+    if (pool.length === 0) break;
+    const lowerRole = role.toLowerCase();
+    if (lowerRole === 'doctor' && !doctor) {
+      doctor = pool.splice(0, 1)[0];
+    } else if ((lowerRole === 'prostitute' || lowerRole === 'putana') && !prostitute) {
+      prostitute = pool.splice(0, 1)[0];
+    } else if (lowerRole === 'maniac' && !maniac) {
+      maniac = pool.splice(0, 1)[0];
+    }
+  }
+
+  // Решта — мирні
+  const citizens = pool;
+
+  // Записуємо ролі та mafiaCount
+  gameObj.mafiaCount = mafiaCount;
+  gameObj.mafia = mafia;
+  gameObj.sheriff = sheriff;
+  gameObj.doctor = doctor ?? '';
+  gameObj.prostitute = prostitute ?? '';
+  gameObj.maniac = maniac ?? '';
+  gameObj.citizens = citizens;
+  // ----------------------
 
   gameObj.isActive = true;
   gameObj.startTime = Date.now();
@@ -339,6 +412,12 @@ export const startGame = async (id: string) => {
 
   gameCache.set(id, gameObj);
   forceSaveGame(id);
+
+  console.log(
+    `[startGame] Game ${id} started. Players: ${playersCount}, Mafia: ${mafiaCount}, ` +
+    `Don: ${mafia[0]}, Sheriff: ${sheriff}, Doctor: ${doctor ?? '-'}, ` +
+    `Prostitute: ${prostitute ?? '-'}, Maniac: ${maniac ?? '-'}, Citizens: ${citizens.length}`
+  );
 
   return gameObj;
 };
