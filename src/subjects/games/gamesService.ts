@@ -97,6 +97,7 @@ const initialGameFlow = {
   votesTime: 15,
   isStarted: false,
   isFinished: false,
+  isPostGame: false,
   isNight: false,
   isVote: false,
   isReVote: false,
@@ -326,6 +327,41 @@ export const restartGame = async (id: string) => {
   return gameObj;
 };
 
+export const finishGame = async (id: string) => {
+  const game = await getGame(id);
+  if (!game) return null;
+
+  const gameObj = toPlainGameObj(game);
+
+  gameObj.gameFlow.isStarted = false;
+  gameObj.gameFlow.isFinished = true;
+  gameObj.gameFlow.isPostGame = true;
+
+  // Reset transient day/night flow state, but KEEP roles
+  gameObj.gameFlow.speaker = '';
+  gameObj.gameFlow.proposed = [];
+  gameObj.gameFlow.proposedBy = {};
+  gameObj.gameFlow.shoot = {};
+  gameObj.gameFlow.voted = {};
+  gameObj.gameFlow.isVote = false;
+  gameObj.gameFlow.isReVote = false;
+  gameObj.gameFlow.isExtraSpeech = false;
+  gameObj.gameFlow.wakeUp = '';
+  gameObj.gameFlow.sheriffCheck = '';
+  gameObj.gameFlow.donCheck = '';
+  gameObj.gameFlow.prostituteBlockPos = undefined;
+  gameObj.gameFlow.prostituteBlock = '';
+  gameObj.gameFlow.doctorSave = '';
+  gameObj.gameFlow.killed = [];
+  gameObj.gameFlow.sleeping = [];
+  gameObj.gameFlow.day = 0;
+
+  gameCache.set(id, gameObj);
+  forceSaveGame(id);
+
+  return gameObj;
+};
+
 /**
  * Fisher-Yates shuffle — повертає новий перемішаний масив.
  */
@@ -408,6 +444,8 @@ export const startGame = async (id: string) => {
   gameObj.isActive = true;
   gameObj.startTime = Date.now();
   gameObj.gameFlow.isStarted = true;
+  gameObj.gameFlow.isFinished = false;
+  gameObj.gameFlow.isPostGame = false;
   gameObj.gameFlow.day = 1;
 
   gameCache.set(id, gameObj);

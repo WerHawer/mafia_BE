@@ -2,7 +2,13 @@ import { NextFunction, Request, Response } from 'express';
 import { createGamesShortData } from '../../helpers/createGamesShortData';
 import { dataNormalize } from '../../helpers/dataNormalize';
 import { idFormatValidation } from '../../helpers/idFormatValidation';
-import { userSocketMap, wsEvents, scheduleEmptyGameDeactivation, cancelEmptyGameDeactivation, handleGMLeave } from '../../wsFlow';
+import {
+  userSocketMap,
+  wsEvents,
+  scheduleEmptyGameDeactivation,
+  cancelEmptyGameDeactivation,
+  handleGMLeave,
+} from '../../wsFlow';
 import * as gamesService from './gamesService';
 import { IGame } from './gamesTypes';
 
@@ -83,16 +89,29 @@ export const updateGame = async (
   }
 
   try {
-    const nightActionKeys = ['gameFlow.sheriffCheck', 'gameFlow.doctorSave', 'gameFlow.donCheck', 'gameFlow.prostituteBlock'];
-    const isNightAction = Object.keys(req.body).some(key => nightActionKeys.includes(key));
-    
+    const nightActionKeys = [
+      'gameFlow.sheriffCheck',
+      'gameFlow.doctorSave',
+      'gameFlow.donCheck',
+      'gameFlow.prostituteBlock',
+    ];
+    const isNightAction = Object.keys(req.body).some((key) =>
+      nightActionKeys.includes(key)
+    );
+
     if (isNightAction) {
       const existingGame = await gamesService.getGame(id);
       if (existingGame) {
-        const isFirstNightSkipped = existingGame.gameFlow?.day === 1 && existingGame.mafiaCount === 1 && existingGame.skipFirstNightIfOneMafia;
-        const canPerformNightActions = (existingGame.gameFlow?.day || 0) > 1 || isFirstNightSkipped;
+        const isFirstNightSkipped =
+          existingGame.gameFlow?.day === 1 &&
+          existingGame.mafiaCount === 1 &&
+          existingGame.skipFirstNightIfOneMafia;
+        const canPerformNightActions =
+          (existingGame.gameFlow?.day || 0) > 1 || isFirstNightSkipped;
         if (!canPerformNightActions) {
-          return res.status(403).send('Actions are not allowed during the first night');
+          return res
+            .status(403)
+            .send('Actions are not allowed during the first night');
         }
       }
     }
@@ -251,7 +270,10 @@ export const removeUserFromGame = async (
       const restartedGame = await gamesService.restartGame(id);
       if (restartedGame) {
         game = restartedGame;
-        io.emit(wsEvents.gamesUpdate, dataNormalize(createGamesShortData(restartedGame)));
+        io.emit(
+          wsEvents.gamesUpdate,
+          dataNormalize(createGamesShortData(restartedGame))
+        );
       }
       scheduleEmptyGameDeactivation(id, io);
     }
@@ -342,6 +364,51 @@ export const restartGame = async (
     );
 
     io.to(id).emit(wsEvents.gameUpdate, dataNormalize(game));
+    // Broadcast to all clients so the home-page list shows the game as joinable again
+    io.emit(wsEvents.gamesUpdate, createGamesShortData(game));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const finishGame = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const { id } = req.params;
+
+  if (!idFormatValidation(id)) {
+    return res.sendError({ message: 'Invalid Game ID format', status: 400 });
+  }
+
+  try {
+    const game = await gamesService.finishGame(id);
+
+    if (!game) {
+      return res.sendError({ message: 'Game not found', status: 404 });
+    }
+
+    const io = res.sendResponse(dataNormalize(game)).io;
+
+    // Remove all sockets from the dead chat room on finish
+    const deadRoom = `${id}_dead`;
+    const socketsInDeadRoom = await io.in(deadRoom).fetchSockets();
+
+    for (const deadSocket of socketsInDeadRoom) {
+      deadSocket.leave(deadRoom);
+    }
+
+    console.log(
+      `[DeadChat] Cleared ${socketsInDeadRoom.length} sockets from ${deadRoom} on finish`
+    );
+
+    io.to(id).emit(wsEvents.gameUpdate, dataNormalize(game));
+    // Unmute all players so everyone can talk during post-game discussion
+    io.to(id).emit(wsEvents.batchMicrophonesStatusChanged, {
+      userIds: game.players?.map((userId) => userId.toString()) || [],
+      enabled: true,
+    });
     // Broadcast to all clients so the home-page list shows the game as joinable again
     io.emit(wsEvents.gamesUpdate, createGamesShortData(game));
   } catch (error) {
@@ -443,7 +510,10 @@ export const addUserToProposed = async (
   }
 
   if (!userId || !proposerId) {
-    return res.sendError({ message: 'userId and proposerId are required', status: 400 });
+    return res.sendError({
+      message: 'userId and proposerId are required',
+      status: 400,
+    });
   }
 
   if (!idFormatValidation(userId)) {
@@ -457,7 +527,10 @@ export const addUserToProposed = async (
       return res.sendError({ message: 'Game not found', status: 404 });
     }
 
-    res.sendResponse(game).io.to(id).emit(wsEvents.addToProposed, { userId, proposerId });
+    res
+      .sendResponse(game)
+      .io.to(id)
+      .emit(wsEvents.addToProposed, { userId, proposerId });
   } catch (error) {
     next(error);
   }
@@ -544,10 +617,16 @@ export const addShoot = async (
   try {
     const existingGame = await gamesService.getGame(id);
     if (existingGame) {
-      const isFirstNightSkipped = existingGame.gameFlow?.day === 1 && existingGame.mafiaCount === 1 && existingGame.skipFirstNightIfOneMafia;
-      const canPerformNightActions = (existingGame.gameFlow?.day || 0) > 1 || isFirstNightSkipped;
+      const isFirstNightSkipped =
+        existingGame.gameFlow?.day === 1 &&
+        existingGame.mafiaCount === 1 &&
+        existingGame.skipFirstNightIfOneMafia;
+      const canPerformNightActions =
+        (existingGame.gameFlow?.day || 0) > 1 || isFirstNightSkipped;
       if (!canPerformNightActions) {
-        return res.status(403).send('Actions are not allowed during the first night');
+        return res
+          .status(403)
+          .send('Actions are not allowed during the first night');
       }
     }
 

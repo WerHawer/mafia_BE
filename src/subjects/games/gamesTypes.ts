@@ -12,6 +12,7 @@ export interface IGameFlow {
   votesTime: number;
   isStarted: boolean;
   isFinished: boolean;
+  isPostGame?: boolean;
   isNight: boolean;
   isVote: boolean;
   isReVote: boolean;

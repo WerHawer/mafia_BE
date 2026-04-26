@@ -42,6 +42,8 @@ export enum wsEvents {
   userMicrophoneStatusChanged = 'userMicrophoneStatusChanged',
   batchToggleMicrophones = 'batchToggleMicrophones',
   batchToggleCameras = 'batchToggleCameras',
+  batchMicrophonesStatusChanged = 'batchMicrophonesStatusChanged',
+  batchCamerasStatusChanged = 'batchCamerasStatusChanged',
   playerSleepConfirm = 'playerSleepConfirm',
   playerSleepAck = 'playerSleepAck',
   playerWakeConfirm = 'playerWakeConfirm',
@@ -754,15 +756,10 @@ export const wsFlow = (io: Server) => {
             `[Batch] Processing ${usersToProcess.length} users (excluded: ${excludedUserIds.length}) - ${enabled ? 'enabling' : 'disabling'} microphones`
           );
 
-          // Client-side only muting — no LiveKit Server SDK calls.
-          // Server SDK only mutes (can't unmute), so we use WS signaling exclusively.
-          usersToProcess.forEach((userId) => {
-            io.to(roomId).emit(wsEvents.userMicrophoneStatusChanged, {
-              userId,
-              participantIdentity: userId,
-              enabled,
-              targetIdentity: userId,
-            });
+          // Instead of sending N individual messages, send one batch message
+          io.to(roomId).emit(wsEvents.batchMicrophonesStatusChanged, {
+            userIds: usersToProcess,
+            enabled,
           });
 
           console.log(
@@ -834,15 +831,10 @@ export const wsFlow = (io: Server) => {
             `[Batch] Processing ${usersToProcess.length} users (excluded: ${excludedUserIds.length}) - ${enabled ? 'enabling' : 'disabling'} cameras`
           );
 
-          // Client-side only muting — no LiveKit Server SDK calls.
-          // Server SDK only mutes (can't unmute), so we use WS signaling exclusively.
-          usersToProcess.forEach((userId) => {
-            io.to(roomId).emit(wsEvents.userCameraStatusChanged, {
-              userId,
-              participantIdentity: userId,
-              enabled,
-              targetIdentity: userId,
-            });
+          // Instead of sending N individual messages, send one batch message
+          io.to(roomId).emit(wsEvents.batchCamerasStatusChanged, {
+            userIds: usersToProcess,
+            enabled,
           });
 
           console.log(
