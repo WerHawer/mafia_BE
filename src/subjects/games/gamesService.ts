@@ -320,6 +320,7 @@ export const restartGame = async (id: string) => {
   const gameObj = toPlainGameObj(game);
 
   Object.assign(gameObj, initialGame);
+  gameObj.observers = []; // Ensure a fresh array instance to avoid shared reference bugs
   gameObj.gameFlow = JSON.parse(JSON.stringify(initialGameFlow));
 
   gameCache.set(id, gameObj);
@@ -451,6 +452,7 @@ export const startGame = async (id: string) => {
   gameObj.gameFlow.isFinished = false;
   gameObj.gameFlow.isPostGame = false;
   gameObj.gameFlow.day = 1;
+  gameObj.observers = []; // Clear any ghosts from previous sessions just in case
 
   gameCache.set(id, gameObj);
   forceSaveGame(id);
