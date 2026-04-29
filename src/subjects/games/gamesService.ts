@@ -123,6 +123,7 @@ const initialGame = {
   prostitute: '',
   startTime: null,
   finishTime: null,
+  observers: [],
   gameFlow: initialGameFlow,
 };
 
@@ -336,6 +337,9 @@ export const finishGame = async (id: string) => {
   gameObj.gameFlow.isStarted = false;
   gameObj.gameFlow.isFinished = true;
   gameObj.gameFlow.isPostGame = true;
+
+  // Clear observers so everyone "revives" for post-game discussion
+  gameObj.observers = [];
 
   // Reset transient day/night flow state, but KEEP roles
   gameObj.gameFlow.speaker = '';
@@ -645,6 +649,22 @@ export const updateSleeping = async (
     gameObj.gameFlow.sleeping = gameObj.gameFlow.sleeping.filter(
       (uid: string) => uid !== userId
     );
+    gameCache.set(id, gameObj);
+    markGameDirty(id);
+  }
+
+  return gameObj;
+};
+
+export const setObserverMode = async (id: string, userId: string) => {
+  const game = await getGame(id);
+  if (!game) return null;
+
+  const gameObj = toPlainGameObj(game);
+  if (!gameObj.observers) gameObj.observers = [];
+
+  if (!gameObj.observers.includes(userId)) {
+    gameObj.observers.push(userId);
     gameCache.set(id, gameObj);
     markGameDirty(id);
   }

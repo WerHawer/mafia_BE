@@ -53,6 +53,7 @@ export interface IGame {
   startTime: number | null;
   finishTime: number | null;
   creatingTime: number;
+  observers: string[];
   gameType: GameType;
   gameFlow: IGameFlow;
 }
@@ -71,6 +72,7 @@ export interface IGameShort {
   mafiaCount: number;
   skipFirstNightIfOneMafia?: boolean;
   additionalRoles: string[];
+  observers: string[];
 }
 
 export interface IGameDTO extends Omit<IGame, 'players'> {

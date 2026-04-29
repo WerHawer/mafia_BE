@@ -25,6 +25,7 @@ const gamesSchema = new Schema<IGame>({
   startTime: { type: Number, default: null },
   finishTime: { type: Number, default: null },
   creatingTime: { type: Number, required: true },
+  observers: { type: [String], default: [] },
   gameType: { type: String, required: true },
   gameFlow: {
     speaker: String,

@@ -55,6 +55,7 @@ export enum wsEvents {
   healthCheck = 'healthCheck',
   gameNotFound = 'gameNotFound',
   gmChanged = 'gmChanged',
+  setObserverMode = 'setObserverMode',
 }
 
 export const userSocketMap = new Map<string, string>();
@@ -70,6 +71,17 @@ const GRACEFUL_RECONNECT_TIMEOUT_MS = 30_000;
 
 // How long to wait before deactivating an empty game (1 minute)
 const EMPTY_GAME_DEACTIVATION_MS = 60_000;
+
+/**
+ * Get a list of all currently online users (with names and avatars)
+ */
+const getOnlineUsers = async () => {
+  const onlineUserIds = Array.from(userSocketMap.keys());
+  if (onlineUserIds.length === 0) return [];
+  
+  const users = await usersService.getUsersByIds(onlineUserIds);
+  return users.map(u => dataNormalize(u));
+};
 
 // Start a 1-minute countdown to deactivate an empty game.
 // Can be cancelled if a player rejoins before it fires.
@@ -307,9 +319,12 @@ export const wsFlow = (io: Server) => {
       });
     }
 
+    const onlineUsers = await getOnlineUsers();
+
     io.emit(wsEvents.connection, {
       message: `connect success. Connected users: ${io.sockets.sockets.size}`,
       connectedUsers: io.sockets.sockets.size,
+      onlineUsers,
     });
 
     // Handle LiveKit token request
@@ -533,7 +548,12 @@ export const wsFlow = (io: Server) => {
       }
 
       // Emit updated connected-user count immediately — socket count is already decremented
-      io.emit(wsEvents.socketDisconnect, io.sockets.sockets.size);
+      getOnlineUsers().then(onlineUsers => {
+        io.emit(wsEvents.socketDisconnect, {
+          connectedUsers: io.sockets.sockets.size,
+          onlineUsers,
+        });
+      });
 
       console.log(
         'SOCKET User disconnected. connected users:',
@@ -857,6 +877,21 @@ export const wsFlow = (io: Server) => {
     );
 
     socket.on(
+      wsEvents.setObserverMode,
+      async ({ gameId, userId }: { gameId: string; userId: string }) => {
+        try {
+          const updatedGame = await gamesService.setObserverMode(gameId, userId);
+          if (updatedGame) {
+            io.to(gameId).emit(wsEvents.gameUpdate, dataNormalize(updatedGame));
+            console.log(`[GhostMode] User ${userId} became an observer in game ${gameId}`);
+          }
+        } catch (error) {
+          console.error(`[GhostMode] Error setting observer mode for user ${userId}:`, error);
+        }
+      }
+    );
+
+    socket.on(
       wsEvents.gameReaction,
       async ({
         gameId,
@@ -876,7 +911,15 @@ export const wsFlow = (io: Server) => {
           // fall back to userId
         }
 
-        io.to(gameId).emit(wsEvents.gameReaction, { userId, userName, emoji });
+        const game = await gamesService.getGame(gameId);
+        const isObserver = game?.observers?.includes(userId);
+
+        if (isObserver) {
+          // Ghost reactions are visible only to dead players and the GM (who is also in the dead room)
+          io.to(`${gameId}_dead`).emit(wsEvents.gameReaction, { userId, userName, emoji });
+        } else {
+          io.to(gameId).emit(wsEvents.gameReaction, { userId, userName, emoji });
+        }
       }
     );
 
