@@ -339,6 +339,8 @@ export const finishGame = async (id: string) => {
   gameObj.gameFlow.isStarted = false;
   gameObj.gameFlow.isFinished = true;
   gameObj.gameFlow.isPostGame = true;
+  // End night for all clients (finish during night must not leave isNight: true)
+  gameObj.gameFlow.isNight = false;
 
   // Clear observers so everyone "revives" for post-game discussion
   gameObj.observers = [];
