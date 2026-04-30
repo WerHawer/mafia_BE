@@ -25,6 +25,7 @@ export interface IGameFlow {
   shoot: Record<string, { shooters: string[]; shots: { x: number; y: number }[] }>;
   killed: string[];
   sheriffCheck?: string;
+  doctorSelfHealUsed?: boolean;
   doctorSave?: string;
   donCheck?: string;
   prostituteBlock?: string;

@@ -47,6 +47,7 @@ const gamesSchema = new Schema<IGame>({
     wakeUp: { type: Schema.Types.Mixed, default: '' },
     killed: [String],
     sheriffCheck: String,
+    doctorSelfHealUsed: { type: Boolean, default: false },
     doctorSave: String,
     donCheck: String,
     prostituteBlock: String,

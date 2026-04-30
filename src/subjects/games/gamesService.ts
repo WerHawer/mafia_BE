@@ -110,6 +110,7 @@ const initialGameFlow = {
   killed: [],
   wakeUp: [],
   sleeping: [],
+  doctorSelfHealUsed: false,
 };
 
 // Base reset state — does NOT include creatingTime (set only at game creation)
@@ -357,6 +358,7 @@ export const finishGame = async (id: string) => {
   gameObj.gameFlow.prostituteBlockPos = undefined;
   gameObj.gameFlow.prostituteBlock = '';
   gameObj.gameFlow.doctorSave = '';
+  gameObj.gameFlow.doctorSelfHealUsed = false;
   gameObj.gameFlow.killed = [];
   gameObj.gameFlow.sleeping = [];
   gameObj.gameFlow.day = 0;
@@ -452,6 +454,7 @@ export const startGame = async (id: string) => {
   gameObj.gameFlow.isFinished = false;
   gameObj.gameFlow.isPostGame = false;
   gameObj.gameFlow.day = 1;
+  gameObj.gameFlow.doctorSelfHealUsed = false;
   gameObj.observers = []; // Clear any ghosts from previous sessions just in case
 
   gameCache.set(id, gameObj);
