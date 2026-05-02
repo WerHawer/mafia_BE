@@ -31,6 +31,7 @@ export interface IGameFlow {
   prostituteBlock?: string;
   prostituteBlockPos?: { x: number; y: number };
   sleeping: string[];
+  immunePlayer: string | null;
 }
 
 export interface IGame {

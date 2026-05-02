@@ -55,6 +55,8 @@ const gamesSchema = new Schema<IGame>({
       x: Number,
       y: Number,
     },
+    sleeping: { type: [String], default: [] },
+    immunePlayer: { type: String, default: null },
   },
 });
 

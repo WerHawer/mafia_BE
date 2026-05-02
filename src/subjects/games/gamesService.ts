@@ -111,6 +111,7 @@ const initialGameFlow = {
   wakeUp: [],
   sleeping: [],
   doctorSelfHealUsed: false,
+  immunePlayer: null,
 };
 
 // Base reset state — does NOT include creatingTime (set only at game creation)
@@ -363,6 +364,7 @@ export const finishGame = async (id: string) => {
   gameObj.gameFlow.doctorSelfHealUsed = false;
   gameObj.gameFlow.killed = [];
   gameObj.gameFlow.sleeping = [];
+  gameObj.gameFlow.immunePlayer = null;
   gameObj.gameFlow.day = 0;
 
   gameCache.set(id, gameObj);
@@ -457,6 +459,7 @@ export const startGame = async (id: string) => {
   gameObj.gameFlow.isPostGame = false;
   gameObj.gameFlow.day = 1;
   gameObj.gameFlow.doctorSelfHealUsed = false;
+  gameObj.gameFlow.immunePlayer = null;
   gameObj.observers = []; // Clear any ghosts from previous sessions just in case
 
   gameCache.set(id, gameObj);
@@ -503,6 +506,20 @@ export const startDay = async (id: string) => {
   gameObj.gameFlow.donCheck = '';
   gameObj.gameFlow.sleeping = [];
 
+  // Immunity expiry: if first night was NOT active (mafiaCount > 1, or mafiaCount === 1
+  // but skipFirstNightIfOneMafia = false), the immunity window ends at the start of day 3.
+  if (gameObj.gameFlow.immunePlayer) {
+    const mafiaCount = (gameObj.mafia ?? []).length;
+    const skip = gameObj.skipFirstNightIfOneMafia ?? true;
+    // "First night active" = 1 mafia AND the "skip first-night restriction" flag is ON
+    // (meaning mafia may shoot in night 1). Every other combination = first night is passive.
+    const firstNightActive = mafiaCount === 1 && skip;
+
+    if (!firstNightActive && gameObj.gameFlow.day === 3) {
+      gameObj.gameFlow.immunePlayer = null;
+    }
+  }
+
   gameCache.set(id, gameObj);
   forceSaveGame(id);
 
@@ -533,6 +550,20 @@ export const startNight = async (id: string) => {
   gameObj.gameFlow.sheriffCheck = '';
   gameObj.gameFlow.donCheck = '';
   gameObj.gameFlow.sleeping = [];
+
+  // Immunity expiry: if first night was active (mafiaCount === 1 AND
+  // skipFirstNightIfOneMafia = true), the immunity window ends at the start of night 2.
+  if (gameObj.gameFlow.immunePlayer) {
+    const mafiaCount = (gameObj.mafia ?? []).length;
+    const skip = gameObj.skipFirstNightIfOneMafia ?? true;
+    // "First night active" = 1 mafia AND the "skip first-night restriction" flag is ON
+    // (meaning mafia may shoot in night 1). Every other combination = first night is passive.
+    const firstNightActive = mafiaCount === 1 && skip;
+
+    if (firstNightActive && gameObj.gameFlow.day === 2) {
+      gameObj.gameFlow.immunePlayer = null;
+    }
+  }
 
   gameCache.set(id, gameObj);
   forceSaveGame(id);
