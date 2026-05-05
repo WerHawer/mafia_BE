@@ -9,6 +9,12 @@ import {
   cancelEmptyGameDeactivation,
   handleGMLeave,
 } from '../../wsFlow';
+import {
+  cancelVoteTimer,
+  scheduleVoteTimer,
+  checkAllVotesIn,
+  handleSingleCandidateFastPath,
+} from '../../services/voteTimerService';
 import * as gamesService from './gamesService';
 import { IGame } from './gamesTypes';
 
@@ -89,6 +95,13 @@ export const updateGame = async (
   }
 
   try {
+    // Read pre-update game state once — reused for both night-action guard
+    // and vote-transition detection. The boolean is captured here as a primitive
+    // BEFORE updateGame mutates the shared cache object through a shallow copy,
+    // so it correctly reflects the state prior to this patch.
+    const preUpdateGame = await gamesService.getGame(id);
+    const wasVoteActive = preUpdateGame?.gameFlow?.isVote === true;
+
     const nightActionKeys = [
       'gameFlow.sheriffCheck',
       'gameFlow.doctorSave',
@@ -99,20 +112,17 @@ export const updateGame = async (
       nightActionKeys.includes(key)
     );
 
-    if (isNightAction) {
-      const existingGame = await gamesService.getGame(id);
-      if (existingGame) {
-        const isFirstNightSkipped =
-          existingGame.gameFlow?.day === 1 &&
-          existingGame.mafiaCount === 1 &&
-          existingGame.skipFirstNightIfOneMafia;
-        const canPerformNightActions =
-          (existingGame.gameFlow?.day || 0) > 1 || isFirstNightSkipped;
-        if (!canPerformNightActions) {
-          return res
-            .status(403)
-            .send('Actions are not allowed during the first night');
-        }
+    if (isNightAction && preUpdateGame) {
+      const isFirstNightSkipped =
+        preUpdateGame.gameFlow?.day === 1 &&
+        preUpdateGame.mafiaCount === 1 &&
+        preUpdateGame.skipFirstNightIfOneMafia;
+      const canPerformNightActions =
+        (preUpdateGame.gameFlow?.day || 0) > 1 || isFirstNightSkipped;
+      if (!canPerformNightActions) {
+        return res
+          .status(403)
+          .send('Actions are not allowed during the first night');
       }
     }
 
@@ -148,6 +158,30 @@ export const updateGame = async (
     }
 
     io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
+
+    // --- Vote timer management via state-transition detection ---
+    // Relies on actual game state before/after the patch — no body-format assumptions.
+    const isVoteActiveNow = normalizedGame.gameFlow?.isVote === true;
+
+    if (isVoteActiveNow && !wasVoteActive) {
+      // isVote just transitioned false → true: start server-side vote timer
+      const proposed: string[] = normalizedGame.gameFlow?.proposed ?? [];
+      const votesTime: number = normalizedGame.gameFlow?.votesTime ?? 0;
+
+      if (proposed.length === 1) {
+        // Single-candidate fast-path: immediately close voting and assign all votes
+        await handleSingleCandidateFastPath(id, io);
+      } else if (proposed.length > 1 && votesTime > 0) {
+        scheduleVoteTimer(id, votesTime, io);
+      } else {
+        console.log(
+          `[VoteTimer] Game ${id}: isVote=true but proposed=${proposed.length}, votesTime=${votesTime} — no timer started`
+        );
+      }
+    } else if (!isVoteActiveNow && wasVoteActive) {
+      // isVote just transitioned true → false: GM manually closed voting
+      cancelVoteTimer(id);
+    }
   } catch (error) {
     next(error);
   }
@@ -349,6 +383,9 @@ export const restartGame = async (
       return res.sendError({ message: 'Game not found', status: 404 });
     }
 
+    // Cancel any running vote timer — no voting in a restarted game
+    cancelVoteTimer(id);
+
     const io = res.sendResponse(dataNormalize(game)).io;
 
     // Remove all sockets from the dead chat room on restart
@@ -388,6 +425,9 @@ export const finishGame = async (
     if (!game) {
       return res.sendError({ message: 'Game not found', status: 404 });
     }
+
+    // Cancel any running vote timer — game is over
+    cancelVoteTimer(id);
 
     const io = res.sendResponse(dataNormalize(game)).io;
 
@@ -461,6 +501,9 @@ export const startDay = async (
       return res.sendError({ message: 'Game not found', status: 404 });
     }
 
+    // Cancel any running vote timer — day transition resets the voting state
+    cancelVoteTimer(id);
+
     res
       .sendResponse(game)
       .io.to(id)
@@ -487,6 +530,9 @@ export const startNight = async (
     if (!game) {
       return res.sendError({ message: 'Game not found', status: 404 });
     }
+
+    // Cancel any running vote timer — night transition resets the voting state
+    cancelVoteTimer(id);
 
     res
       .sendResponse(game)
@@ -574,10 +620,11 @@ export const addVote = async (
       return res.sendError({ message: 'Game not found', status: 404 });
     }
 
-    res
-      .sendResponse(game)
-      .io.to(id)
-      .emit(wsEvents.vote, { targetUserId, voterId });
+    const io = res.sendResponse(game).io;
+    io.to(id).emit(wsEvents.vote, { targetUserId, voterId });
+
+    // Check if all eligible voters have now cast their vote — triggers early close if so
+    await checkAllVotesIn(id, io);
   } catch (error) {
     next(error);
   }

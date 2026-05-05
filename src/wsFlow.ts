@@ -56,6 +56,7 @@ export enum wsEvents {
   gameNotFound = 'gameNotFound',
   gmChanged = 'gmChanged',
   setObserverMode = 'setObserverMode',
+  voteTimerExpired = 'voteTimerExpired',
 }
 
 export const userSocketMap = new Map<string, string>();
