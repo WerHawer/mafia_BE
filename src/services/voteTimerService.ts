@@ -162,8 +162,9 @@ export const checkAllVotesIn = async (gameId: string, io: Server): Promise<void>
 
 /**
  * Single-candidate fast-path:
- * If there is exactly one proposed candidate, all eligible voters are immediately
- * assigned to them, isVote is set to false, and the result is broadcast.
+ * If there is exactly one proposed candidate, all eligible voters (excluding the
+ * candidate themselves) are immediately assigned to them, isVote is set to false,
+ * and the result is broadcast.
  *
  * Returns true if the fast-path was executed, false otherwise.
  */
@@ -178,8 +179,13 @@ export const handleSingleCandidateFastPath = async (
     const proposed: string[] = game.gameFlow?.proposed ?? [];
     if (proposed.length !== 1) return false;
 
+    const candidate = proposed[0];
     const eligibleVoters = calculateEligibleVoters(game);
-    const finalVoted: Record<string, string[]> = { [proposed[0]]: eligibleVoters };
+
+    // Candidate cannot vote for/against themselves — exclude them from voters
+    const votersExcludingCandidate = eligibleVoters.filter((v) => v !== candidate);
+
+    const finalVoted: Record<string, string[]> = { [candidate]: votersExcludingCandidate };
 
     const updatedGame = await gamesService.updateGame(gameId, {
       'gameFlow.voted': finalVoted,
@@ -191,7 +197,7 @@ export const handleSingleCandidateFastPath = async (
     cancelVoteTimer(gameId);
 
     console.log(
-      `[VoteTimer] Game ${gameId}: single-candidate fast-path executed for candidate ${proposed[0]}`
+      `[VoteTimer] Game ${gameId}: single-candidate fast-path executed for candidate ${candidate}. Voters (excluding candidate): ${votersExcludingCandidate.length}`
     );
 
     io.to(gameId).emit(wsEvents.voteTimerExpired, { gameId, finalVoted });
@@ -203,4 +209,3 @@ export const handleSingleCandidateFastPath = async (
     return false;
   }
 };
-

@@ -57,6 +57,11 @@ export enum wsEvents {
   gmChanged = 'gmChanged',
   setObserverMode = 'setObserverMode',
   voteTimerExpired = 'voteTimerExpired',
+  // Emitted to a specific socket when we detect it has reconnected after a brief
+  // disconnect. The FE should respond by re-checking and re-publishing its LiveKit
+  // video/audio tracks, since the WebRTC session may have silently died while the
+  // Socket.io TCP connection was recovering.
+  videoRepublishRequired = 'videoRepublishRequired',
 }
 
 export const userSocketMap = new Map<string, string>();
@@ -312,6 +317,11 @@ export const wsFlow = (io: Server) => {
         console.log(
           `[Reconnect] Cancelled pending disconnect timer for user ${userId}`
         );
+        // The Socket.io session recovered within the grace period.
+        // The LiveKit WebRTC session (UDP) may have silently died while the
+        // TCP connection was restoring — signal the client to re-publish its tracks.
+        socket.emit(wsEvents.videoRepublishRequired, { reason: 'socket_reconnect' });
+        console.log(`[Reconnect] Emitted videoRepublishRequired to user ${userId}`);
       }
 
       // Mark user as online again in case the timer had already fired
@@ -358,7 +368,7 @@ export const wsFlow = (io: Server) => {
     );
 
     socket.on(wsEvents.healthCheck, (data, callback) => {
-      const { gameId, userId } = data || {};
+      const { gameId, userId, videoIssue } = data || {};
       if (gameId && userId) {
         if (!socket.rooms.has(gameId)) {
           console.log(`[HealthCheck] User ${userId} was not in room ${gameId}. Force joining.`);
@@ -366,7 +376,12 @@ export const wsFlow = (io: Server) => {
         }
       }
       if (typeof callback === 'function') {
-        callback({ ok: true });
+        // If FE reports a video issue, acknowledge it and tell it to republish
+        callback({ ok: true, shouldRepublishVideo: !!videoIssue });
+      }
+      // Also emit the event directly so FE can handle it without a callback
+      if (videoIssue) {
+        socket.emit(wsEvents.videoRepublishRequired, { reason: 'health_check_reported' });
       }
     });
 

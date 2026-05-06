@@ -159,6 +159,39 @@ export const updateGame = async (
 
     io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
 
+    // --- Synchronized timer timestamps ---
+    // Detect timer-start transitions and stamp them with the server's current time.
+    // The FE calculates: endTime = timerStartedAt + duration * 1000, so every client
+    // counts down to the same absolute moment — lag in receiving the event doesn't matter.
+    const now = Date.now();
+    const timestampUpdates: Record<string, number> = {};
+
+    const prevSpeaker = preUpdateGame?.gameFlow?.speaker ?? '';
+    const nowSpeaker = normalizedGame.gameFlow?.speaker ?? '';
+    if (nowSpeaker && nowSpeaker !== prevSpeaker) {
+      // Speaker changed to a new player — stamp the start of their speech
+      normalizedGame.gameFlow.timerStartedAt = now;
+      timestampUpdates['gameFlow.timerStartedAt'] = now;
+    }
+
+    const prevIsExtraSpeech = preUpdateGame?.gameFlow?.isExtraSpeech === true;
+    const nowIsExtraSpeech = normalizedGame.gameFlow?.isExtraSpeech === true;
+    if (nowIsExtraSpeech && !prevIsExtraSpeech) {
+      // Extra / last speech just started
+      normalizedGame.gameFlow.timerStartedAt = now;
+      timestampUpdates['gameFlow.timerStartedAt'] = now;
+    }
+
+    // Vote start timestamp is injected below together with the timer scheduling block.
+    // We persist it there so the single updateGame call handles both.
+
+    if (Object.keys(timestampUpdates).length > 0) {
+      // Persist timestamps to cache (will be flushed to DB by write-behind aggregator)
+      await gamesService.updateGame(id, timestampUpdates as any);
+      // Re-emit with timestamps now that normalizedGame has them set
+      io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
+    }
+
     // --- Vote timer management via state-transition detection ---
     // Relies on actual game state before/after the patch — no body-format assumptions.
     const isVoteActiveNow = normalizedGame.gameFlow?.isVote === true;
@@ -167,6 +200,11 @@ export const updateGame = async (
       // isVote just transitioned false → true: start server-side vote timer
       const proposed: string[] = normalizedGame.gameFlow?.proposed ?? [];
       const votesTime: number = normalizedGame.gameFlow?.votesTime ?? 0;
+
+      // Stamp the vote start time for synchronized FE countdown
+      normalizedGame.gameFlow.timerStartedAt = now;
+      await gamesService.updateGame(id, { 'gameFlow.timerStartedAt': now } as any);
+      io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
 
       if (proposed.length === 1) {
         // Single-candidate fast-path: immediately close voting and assign all votes

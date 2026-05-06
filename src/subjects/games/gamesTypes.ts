@@ -18,6 +18,10 @@ export interface IGameFlow {
   isReVote: boolean;
   isExtraSpeech: boolean;
   day: number;
+  // Server-assigned Unix timestamp (ms) for the start of the current timer.
+  // The FE computes endTime = timerStartedAt + duration * 1000, so all clients
+  // count down to the same absolute moment. Re-used for speaking, voting, etc.
+  timerStartedAt?: number;
   proposed: string[];
   proposedBy: Record<string, string>;
   voted: Record<string, string[]>;

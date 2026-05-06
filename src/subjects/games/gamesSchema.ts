@@ -57,6 +57,8 @@ const gamesSchema = new Schema<IGame>({
     },
     sleeping: { type: [String], default: [] },
     immunePlayer: { type: String, default: null },
+    // Server-assigned Unix timestamp for synchronized client-side timers
+    timerStartedAt: { type: Number, default: null },
   },
 });
 

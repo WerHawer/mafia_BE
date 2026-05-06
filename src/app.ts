@@ -39,6 +39,14 @@ const io = new Server(httpServer, {
   // caused ping timeouts when the browser main thread was busy with MediaPipe/canvas.
   pingInterval: 25000,
   pingTimeout: 20000,
+  // Buffer missed events on the server for up to 2 minutes after a disconnect.
+  // When the client reconnects within that window, Socket.io automatically replays
+  // all buffered events (gameUpdate, startNight, voteTimerExpired, etc.) so the
+  // player's game state is restored without any manual refetch from the FE.
+  connectionStateRecovery: {
+    maxDisconnectionDuration: 2 * 60 * 1000,
+    skipMiddlewares: true,
+  },
 });
 
 wsFlow(io);

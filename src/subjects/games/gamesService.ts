@@ -505,6 +505,7 @@ export const startDay = async (id: string) => {
   gameObj.gameFlow.sheriffCheck = '';
   gameObj.gameFlow.donCheck = '';
   gameObj.gameFlow.sleeping = [];
+  gameObj.gameFlow.timerStartedAt = undefined;
 
   // Immunity expiry: if first night was NOT active (mafiaCount > 1, or mafiaCount === 1
   // but skipFirstNightIfOneMafia = false), the immunity window ends at the start of day 3.
@@ -550,6 +551,7 @@ export const startNight = async (id: string) => {
   gameObj.gameFlow.sheriffCheck = '';
   gameObj.gameFlow.donCheck = '';
   gameObj.gameFlow.sleeping = [];
+  gameObj.gameFlow.timerStartedAt = undefined;
 
   // Immunity expiry: if first night was active (mafiaCount === 1 AND
   // skipFirstNightIfOneMafia = true), the immunity window ends at the start of night 2.
