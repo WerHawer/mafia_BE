@@ -367,14 +367,33 @@ export const wsFlow = (io: Server) => {
       }
     );
 
-    socket.on(wsEvents.healthCheck, (data, callback) => {
+    socket.on(wsEvents.healthCheck, async (data, callback) => {
       const { gameId, userId, videoIssue } = data || {};
       if (gameId && userId) {
+        // Core room check
         if (!socket.rooms.has(gameId)) {
           console.log(`[HealthCheck] User ${userId} was not in room ${gameId}. Force joining.`);
           socket.join(gameId);
         }
+
+        // Dead room check
+        try {
+          const game = await gamesService.getGame(gameId);
+          if (game) {
+            const isDead = game.gameFlow?.killed?.includes(userId) || false;
+            const isGM = game.gm.toString() === userId;
+            const deadRoomId = `${gameId}_dead`;
+
+            if ((isDead || isGM) && !socket.rooms.has(deadRoomId)) {
+              console.log(`[HealthCheck] User ${userId} (GM: ${isGM}, Dead: ${isDead}) was not in dead room ${deadRoomId}. Force joining.`);
+              socket.join(deadRoomId);
+            }
+          }
+        } catch (err) {
+          console.error(`[HealthCheck] Failed to verify dead room membership for user ${userId}:`, err);
+        }
       }
+      
       if (typeof callback === 'function') {
         // If FE reports a video issue, acknowledge it and tell it to republish
         callback({ ok: true, shouldRepublishVideo: !!videoIssue });
