@@ -261,9 +261,29 @@ export const addGamePlayers = (id: string, playerId: string) =>
     }
 
     const gameObj = toPlainGameObj(game);
+    const oldGM = gameObj.gm;
+    let gmChanged = false;
 
     if (!gameObj.players.includes(playerId)) {
+      // Auto-assign GM if the game is currently empty OR the current GM is not in the game.
+      // Note: We check against the players list BEFORE adding the current joining player.
+      const isGameEmpty = gameObj.players.length === 0;
+      const isGMMissing = !gameObj.players.includes(oldGM);
+
       gameObj.players.push(playerId);
+
+      if (isGameEmpty || isGMMissing) {
+        gameObj.gm = playerId;
+        if (oldGM !== playerId) {
+          gmChanged = true;
+          console.log(
+            `[addGamePlayers] Auto-assigned new GM: ${playerId} (Reason: ${
+              isGameEmpty ? 'Empty Game' : 'GM Missing'
+            })`
+          );
+        }
+      }
+
       gameCache.set(id, gameObj);
       // Player join is a key event — force immediate DB sync instead of waiting for the aggregator
       await forceSaveGame(id);
@@ -273,7 +293,7 @@ export const addGamePlayers = (id: string, playerId: string) =>
       `[addGamePlayers] Current players: (count: ${gameObj.players.length})`
     );
 
-    return gameObj;
+    return { game: gameObj, gmChanged };
   });
 
 export const removeGamePlayers = (id: string, playerId: string) =>

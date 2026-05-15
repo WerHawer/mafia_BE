@@ -62,6 +62,9 @@ export enum wsEvents {
   // video/audio tracks, since the WebRTC session may have silently died while the
   // Socket.io TCP connection was recovering.
   videoRepublishRequired = 'videoRepublishRequired',
+  // Emitted to ALL clients when a specific user's online status changes.
+  // Payload: { userId: string; isOnline: boolean }
+  userOnlineStatusChanged = 'userOnlineStatusChanged',
 }
 
 export const userSocketMap = new Map<string, string>();
@@ -207,7 +210,10 @@ export const handleGMLeave = (
 
 const handlePlayerDisconnectTimeout = async (
   userId: string,
-  io: Server
+  io: Server,
+  // Set to true when called from an explicit logout — online status was already
+  // updated and the event was already emitted, so we skip both here to avoid duplicates.
+  skipStatusUpdate = false
 ): Promise<void> => {
   try {
     // Safety check: if the user reconnected before the timer fired, abort removal.
@@ -219,7 +225,10 @@ const handlePlayerDisconnectTimeout = async (
       return;
     }
 
-    await usersService.setUserOnlineStatus(userId, false);
+    if (!skipStatusUpdate) {
+      await usersService.setUserOnlineStatus(userId, false);
+      io.emit(wsEvents.userOnlineStatusChanged, { userId, isOnline: false });
+    }
 
     const game = await gamesService.findGameByPlayerId(userId);
 
@@ -306,6 +315,33 @@ export const wsFlow = (io: Server) => {
     const userId = socket.handshake.auth.userId as string | undefined;
 
     if (userId) {
+      // Guard against stale socket.io auto-reconnects after logout.
+      // If the user has no refreshToken their session was invalidated — reject immediately
+      // without cancelling any pending grace timer.
+      const sessionUser = await usersService.getUserById(userId).catch(() => null);
+      if (!sessionUser || !sessionUser.refreshToken) {
+        console.log(
+          `[Connect] User ${userId} has no valid session (logged out) — rejecting stale socket ${socket.id}`
+        );
+        socket.disconnect(true);
+        return;
+      }
+
+      // If there's already a live socket for this user (e.g. duplicate tab), disconnect the old one
+      // so we don't have two competing entries in userSocketMap.
+      const existingSocketId = userSocketMap.get(userId);
+      if (existingSocketId && existingSocketId !== socket.id) {
+        const existingSocket = io.sockets.sockets.get(existingSocketId);
+        if (existingSocket) {
+          // Mark as replaced so the disconnect handler skips the grace timer
+          existingSocket.data.isLoggedOut = true;
+          existingSocket.disconnect(true);
+          console.log(
+            `[Connect] Replaced stale socket ${existingSocketId} with ${socket.id} for user ${userId}`
+          );
+        }
+      }
+
       userSocketMap.set(userId, socket.id);
       socket.data.userId = userId;
 
@@ -328,6 +364,8 @@ export const wsFlow = (io: Server) => {
       await usersService.setUserOnlineStatus(userId, true).catch((error) => {
         console.error(`[Connect] Failed to set user ${userId} online:`, error);
       });
+
+      io.emit(wsEvents.userOnlineStatusChanged, { userId, isOnline: true });
     }
 
     const onlineUsers = await getOnlineUsers();
@@ -564,18 +602,30 @@ export const wsFlow = (io: Server) => {
       if (disconnectedUserId) {
         userSocketMap.delete(disconnectedUserId);
 
-        // Start a grace period before removing the player from the game.
-        // This allows players who briefly lose connectivity to rejoin without losing their spot.
-        const timer = setTimeout(() => {
-          disconnectTimers.delete(disconnectedUserId);
-          handlePlayerDisconnectTimeout(disconnectedUserId, io);
-        }, GRACEFUL_RECONNECT_TIMEOUT_MS);
+        if (socket.data.isLoggedOut) {
+          // Explicit logout — no grace period needed.
+          // Online status + userOnlineStatusChanged already handled in logoutUser.
+          // Remove from game immediately.
+          console.log(
+            `[Logout] User ${disconnectedUserId} explicitly logged out — running immediate game cleanup`
+          );
+          handlePlayerDisconnectTimeout(disconnectedUserId, io, true);
+        } else {
+          // Network disconnect — start grace period before removing the player from the game.
+          // This allows players who briefly lose connectivity to rejoin without losing their spot.
+          // The offline DB update and userOnlineStatusChanged event are also delayed —
+          // if the user reconnects within the grace period, neither will fire.
+          const timer = setTimeout(() => {
+            disconnectTimers.delete(disconnectedUserId);
+            handlePlayerDisconnectTimeout(disconnectedUserId, io);
+          }, GRACEFUL_RECONNECT_TIMEOUT_MS);
 
-        disconnectTimers.set(disconnectedUserId, timer);
+          disconnectTimers.set(disconnectedUserId, timer);
 
-        console.log(
-          `[Disconnect] Started ${GRACEFUL_RECONNECT_TIMEOUT_MS / 1000}s grace timer for user ${disconnectedUserId}`
-        );
+          console.log(
+            `[Disconnect] Started ${GRACEFUL_RECONNECT_TIMEOUT_MS / 1000}s grace timer for user ${disconnectedUserId}`
+          );
+        }
       } else {
         console.warn(
           `[Disconnect] Socket ${socket.id} disconnected without a userId — game cleanup skipped`

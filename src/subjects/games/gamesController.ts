@@ -274,7 +274,7 @@ export const addUserToGame = async (
   }
 
   try {
-    const game = await gamesService.addGamePlayers(id, userId);
+    const { game, gmChanged } = await gamesService.addGamePlayers(id, userId);
 
     if (!game) {
       console.error(`[addUserToGame Controller] Game ${id} not found`);
@@ -289,6 +289,16 @@ export const addUserToGame = async (
     const io = res.sendResponse(game).io;
 
     io.to(id).emit(wsEvents.gameUpdate, normalizedGame);
+
+    if (gmChanged) {
+      io.to(id).emit(wsEvents.gmChanged, {
+        newGMId: game.gm,
+        reason: 'joined_empty_game',
+      });
+      console.log(
+        `[GM] Game ${id}: GM changed to ${game.gm} (Joined Empty Game)`
+      );
+    }
     // Cancel empty-game deactivation timer if someone rejoined
     cancelEmptyGameDeactivation(id);
     // Broadcast to all clients so the home page game list stays in sync

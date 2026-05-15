@@ -15,7 +15,7 @@ import { comparePassword } from '../../helpers/comparePassword';
 import jwt from 'jsonwebtoken';
 import { getSecret } from '../../helpers/getSecret';
 import * as messagesService from '../messages/messagesService';
-import { wsEvents } from '../../wsFlow';
+import { wsEvents, userSocketMap } from '../../wsFlow';
 import { dataNormalize } from '../../helpers/dataNormalize';
 
 export const getAllUsers = async (
@@ -196,8 +196,27 @@ export const refreshUserToken = async (req: Request, res: Response, next: NextFu
 export const logoutUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.user as any;
-    
+
     await userService.updateUser(`${id}`, { refreshToken: '' });
+    await userService.setUserOnlineStatus(`${id}`, false);
+
+    // Notify all clients immediately — no need to wait for the 30s grace timer
+    res.io.emit(wsEvents.userOnlineStatusChanged, { userId: id, isOnline: false });
+
+    // Force-disconnect the socket so the BE cleans up game membership right away
+    const socketId = userSocketMap.get(`${id}`);
+    if (socketId) {
+      const socket = res.io.sockets.sockets.get(socketId);
+      if (socket) {
+        // Remove from map before disconnecting to suppress the redundant 30s grace timer
+        userSocketMap.delete(`${id}`);
+        // Signal the disconnect handler to skip the grace timer and status update
+        socket.data.isLoggedOut = true;
+        socket.disconnect(true);
+        console.log(`[Logout] Force-disconnected socket ${socketId} for user ${id}`);
+      }
+    }
+
     res.sendResponse({ message: 'Logged out successfully' });
   } catch (error) {
     next(error);
