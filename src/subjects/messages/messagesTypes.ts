@@ -9,6 +9,8 @@ type To =
       id: string;
     };
 
+export type ReactionMap = Record<string, string[]>; // emojiUnified → userId[]
+
 export interface IMessage {
   text: string;
   sender: IUser;
@@ -16,4 +18,5 @@ export interface IMessage {
   createdAt: number;
   isRead: boolean;
   _id?: string;
+  reactions?: ReactionMap;
 }

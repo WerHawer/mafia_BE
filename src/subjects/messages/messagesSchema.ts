@@ -14,6 +14,7 @@ const messagesSchema = new Schema<IMessage>({
   },
   createdAt: { type: Number, required: true },
   isRead: { type: Boolean, required: true },
+  reactions: { type: Schema.Types.Mixed, default: {} },
 });
 
 export const Messages = model<IMessage>(DBSubject.Messages, messagesSchema);

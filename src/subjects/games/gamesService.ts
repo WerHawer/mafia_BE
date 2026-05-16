@@ -426,9 +426,9 @@ export const startGame = async (id: string) => {
 
   const playersCount = activePlayers.length;
 
-  // Формула: 8+ → 3 мафії, 7 → 2, ≤6 → 1
+  // 4-6 → 1, 7-8 → 2, 9+ → 3
   const mafiaCount =
-    playersCount >= 8 ? 3 : playersCount === 7 ? 2 : 1;
+    playersCount >= 9 ? 3 : playersCount >= 7 ? 2 : 1;
 
   // Оскільки ми вже перемішали gameObj.players, activePlayers також у випадковому порядку.
   // Але для додаткової впевненості у розподілі ролей можемо перемішати ще раз самі активні ролі.

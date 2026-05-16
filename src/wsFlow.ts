@@ -52,6 +52,7 @@ export enum wsEvents {
   manualWake = 'manualWake',
   peerDisconnect = 'peerDisconnect',
   gameReaction = 'gameReaction',
+  messageReactionToggle = 'messageReactionToggle',
   healthCheck = 'healthCheck',
   gameNotFound = 'gameNotFound',
   gmChanged = 'gmChanged',
@@ -1004,6 +1005,48 @@ export const wsFlow = (io: Server) => {
           io.to(`${gameId}_dead`).emit(wsEvents.gameReaction, { userId, userName, emoji });
         } else {
           io.to(gameId).emit(wsEvents.gameReaction, { userId, userName, emoji });
+        }
+      }
+    );
+
+    socket.on(
+      wsEvents.messageReactionToggle,
+      async ({
+        messageId,
+        roomId,
+        emojiUnified,
+        userId,
+      }: {
+        messageId: string;
+        roomId: string;
+        emojiUnified: string;
+        userId: string;
+      }) => {
+        try {
+          if (!messageId || !roomId || !emojiUnified || !userId) {
+            console.error('[Reaction] Missing required parameters');
+            return;
+          }
+
+          const updated = await messagesService.toggleReaction(messageId, emojiUnified, userId);
+          if (!updated) {
+            console.error(`[Reaction] Message ${messageId} not found`);
+            return;
+          }
+
+          const payload = {
+            messageId,
+            roomId,
+            reactions: (updated.reactions as Record<string, string[]>) ?? {},
+          };
+
+          if (roomId === 'public') {
+            io.emit(wsEvents.messageReactionToggle, payload);
+          } else {
+            io.to(roomId).emit(wsEvents.messageReactionToggle, payload);
+          }
+        } catch (error) {
+          console.error('[Reaction] Error toggling reaction:', error);
         }
       }
     );

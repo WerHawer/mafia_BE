@@ -1,5 +1,5 @@
 import { Messages } from './messagesSchema';
-import { IMessage } from './messagesTypes';
+import { IMessage, ReactionMap } from './messagesTypes';
 import { Populate } from '../DBTypes';
 
 export const messagesPopulate = {
@@ -34,3 +34,24 @@ export const getRoomMessages = async (id: string) =>
 
 export const createMessage = async (message: IMessage) =>
   Messages.create(message);
+
+export const toggleReaction = async (
+  messageId: string,
+  emojiUnified: string,
+  userId: string
+) => {
+  const message = await Messages.findById(messageId);
+  if (!message) return null;
+
+  const reactions: ReactionMap = { ...((message.reactions as ReactionMap) ?? {}) };
+  const existing = reactions[emojiUnified] ?? [];
+
+  const next = existing.includes(userId)
+    ? existing.filter((u) => u !== userId)
+    : [...existing, userId];
+
+  if (next.length === 0) delete reactions[emojiUnified];
+  else reactions[emojiUnified] = next;
+
+  return Messages.findByIdAndUpdate(messageId, { $set: { reactions } }, { new: true });
+};
